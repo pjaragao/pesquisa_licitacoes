@@ -1,0 +1,804 @@
+{% extends "base.html" %}
+
+{% block title %}Resultados - Pesquisa de Licitações{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>📋 Resultados de Pesquisa</h2>
+    <p>Licitações encontradas no Portal de Compras Públicas.</p>
+</div>
+
+<!-- Filtros -->
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+        <h3 style="margin: 0; border: none;">🔍 Filtros Pesquisa</h3>
+        <a href="{{ url_for('main.pagina_resultados') }}" class="btn btn-sm btn-link">❌ Limpar Filtros</a>
+    </div>
+    <form action="{{ url_for('main.pagina_resultados') }}" method="GET" id="filter-form" class="compact-form">
+        <div class="filter-grid-compact">
+            <div class="form-group-compact">
+                <label>Palavra-Chave:</label>
+                <select name="palavra_id" class="input-sm">
+                    <option value="">Todas</option>
+                    {% for p in palavras %}
+                    <option value="{{ p.id }}" {% if filtro_palavra==p.id %}selected{% endif %}>{{ p.termo }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group-compact">
+                <label>Status:</label>
+                <select name="status" class="input-sm">
+                    <option value="">Todos</option>
+                    <option value="Recebendo propostas" {% if filtro_status=='Recebendo propostas' %}selected{% endif
+                        %}>Recebendo propostas</option>
+                    <option value="Processo Finalizado" {% if filtro_status=='Processo Finalizado' %}selected{% endif
+                        %}>Processo Finalizado</option>
+                    <option value="Em andamento" {% if filtro_status=='Em andamento' %}selected{% endif %}>Em andamento
+                    </option>
+                </select>
+            </div>
+            <div class="form-group-compact">
+                <label>Valor Mínimo:</label>
+                <input type="text" id="valor_min_display" class="input-sm currency-mask" placeholder="R$ 0,00"
+                    value="{{ filtro_valor_min if filtro_valor_min }}">
+                <input type="hidden" name="valor_min" id="valor_min" value="{{ filtro_valor_min or '' }}">
+            </div>
+            <div class="form-group-compact">
+                <label>Valor Máximo:</label>
+                <input type="text" id="valor_max_display" class="input-sm currency-mask" placeholder="R$ 0,00"
+                    value="{{ filtro_valor_max if filtro_valor_max }}">
+                <input type="hidden" name="valor_max" id="valor_max" value="{{ filtro_valor_max or '' }}">
+            </div>
+            <div class="form-group-compact">
+                <label>Abertura De:</label>
+                <input type="date" name="data_de" class="input-sm" value="{{ filtro_data_de or '' }}">
+            </div>
+            <div class="form-group-compact">
+                <label>Abertura Até:</label>
+                <input type="date" name="data_ate" class="input-sm" value="{{ filtro_data_ate or '' }}">
+            </div>
+            <div class="form-group-compact">
+                <label>🤖 Classificação IA:</label>
+                <select name="classificacao_ia" class="input-sm">
+                    <option value="">Todas</option>
+                    <option value="ADEQUADO" {% if filtro_classificacao_ia=='ADEQUADO' %}selected{% endif %}>✅ Adequado
+                    </option>
+                    <option value="NAO_ADEQUADO" {% if filtro_classificacao_ia=='NAO_ADEQUADO' %}selected{% endif %}>❌
+                        Não Adequado</option>
+                    <option value="INCERTO" {% if filtro_classificacao_ia=='INCERTO' %}selected{% endif %}>⚠️ Incerto
+                    </option>
+                    <option value="NAO_CLASSIFICADO" {% if filtro_classificacao_ia=='NAO_CLASSIFICADO' %}selected{%
+                        endif %}>⏳ Não Classificado</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="regional-section-compact">
+            <label class="section-label">📍 Estados por Região:</label>
+            <div class="regions-grid-compact">
+                {% set regions = {
+                'Norte': ['AC', 'AM', 'AP', 'PA', 'RO', 'RR', 'TO'],
+                'Nordeste': ['AL', 'BA', 'CE', 'MA', 'PB', 'PE', 'PI', 'RN', 'SE'],
+                'Centro-Oeste': ['DF', 'GO', 'MT', 'MS'],
+                'Sudeste': ['ES', 'MG', 'RJ', 'SP'],
+                'Sul': ['PR', 'RS', 'SC']
+                } %}
+
+                {% for region, ufs in regions.items() %}
+                <div class="region-card-compact">
+                    <div class="region-header-sm">
+                        <span>{{ region }}</span>
+                        <label class="toggle-all-sm">
+                            <input type="checkbox" class="region-toggle"
+                                onchange="toggleRegion(this, '{{ region|lower }}')" {% set all_in=true %}{% for uf in
+                                ufs %}{% if uf not in (filtro_ufs or []) %}{% set all_in=false %}{% endif %}{% endfor
+                                %}{% if all_in and filtro_ufs %}checked{% endif %}>
+                            <small>Tudo</small>
+                        </label>
+                    </div>
+                    <div class="region-ufs-compact" data-region="{{ region|lower }}">
+                        {% for uf in ufs %}
+                        <label class="uf-checkbox-sm">
+                            <input type="checkbox" name="ufs[]" value="{{ uf }}" {% if uf in (filtro_ufs or [])
+                                %}checked{% endif %}>
+                            <span>{{ uf }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="filter-actions-compact">
+            <button type="submit" class="btn btn-primary btn-sm">🔍 Filtrar Resultados</button>
+        </div>
+    </form>
+</div>
+
+<!-- Classificação por IA -->
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h3 style="margin: 0; border: none;">🤖 Classificação por IA</h3>
+        <div>
+            {% if genkit_disponivel %}
+            <span class="badge badge-success">✓ IA Disponível</span>
+            {% else %}
+            <span class="badge badge-danger">✗ IA Indisponível</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="ia-section">
+        <div class="ia-prompt-area">
+            <label><strong>📝 Descrição do Ramo de Atividade da Empresa:</strong></label>
+            <p style="font-size: 0.85rem; color: #666; margin-bottom: 0.5rem;">
+                Descreva o que sua empresa faz para que a IA possa classificar se as licitações são adequadas.
+            </p>
+
+            <div style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                <label style="margin: 0; white-space: nowrap;"><strong>🤖 Modelo de IA:</strong></label>
+                <select id="model-select" class="input-sm" style="flex: 1; max-width: 300px;">
+                    <option value="gemini-2.0-flash">Gemini 2.0 Flash (Carregando...)</option>
+                </select>
+                <button type="button" class="btn btn-xs btn-outline-info" onclick="carregarModelos()"
+                    title="Atualizar modelos">🔄</button>
+            </div>
+
+            <textarea id="prompt-empresa" rows="4" class="input-full"
+                placeholder="Ex: Empresa de saneamento básico, especializada em tratamento de água e esgoto, obras de infraestrutura hidráulica, manutenção de redes de distribuição...">{{ configuracao.prompt_empresa if configuracao else '' }}</textarea>
+
+            <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap;">
+                <button type="button" class="btn btn-sm btn-secondary" onclick="salvarPrompt()" id="btn-salvar-prompt">
+                    💾 Salvar Prompt
+                </button>
+                <button type="button" class="btn btn-sm btn-info" onclick="otimizarPrompt()" id="btn-otimizar" {% if not
+                    genkit_disponivel %}disabled{% endif %}>
+                    ✨ Melhorar Prompt com IA
+                </button>
+                <button type="button" class="btn btn-sm btn-primary" onclick="classificarResultados()"
+                    id="btn-classificar" {% if not genkit_disponivel or not configuracao or not
+                    configuracao.prompt_empresa %}disabled{% endif %}>
+                    🎯 Classificar Todos
+                </button>
+                <button type="button" class="btn btn-sm btn-danger" onclick="limparClassificacoes()" id="btn-limpar-ia">
+                    🗑️ Limpar Classificações
+                </button>
+            </div>
+
+            <!-- Estatísticas de Classificação -->
+            <div id="ia-stats"
+                style="margin-top: 1rem; padding: 1rem; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                <strong>📊 Estatísticas de Classificação:</strong>
+                <div id="stats-content" style="display: flex; gap: 1.5rem; margin-top: 0.5rem; flex-wrap: wrap;">
+                    <span>Carregando...</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="ia-feedback"
+            style="display: none; margin-top: 1rem; padding: 1rem; border-radius: 8px; background: #f0f9ff;">
+            <div id="ia-feedback-content"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Lista de resultados -->
+<div class="card">
+    <div class="sorting-bar">
+        <div class="sorting-controls">
+            <span class="sorting-label">🔃 Ordenar por:</span>
+            <select name="ordenar_por" class="input-xs sort-trigger" form="filter-form">
+                <option value="criado_em" {% if ordenar_por=='criado_em' %}selected{% endif %}>Data Cadastro</option>
+                <option value="data" {% if ordenar_por=='data' %}selected{% endif %}>Data Abertura</option>
+                <option value="valor" {% if ordenar_por=='valor' %}selected{% endif %}>Valor Estimado</option>
+            </select>
+            <select name="direcao" class="input-xs sort-trigger" form="filter-form">
+                <option value="desc" {% if direcao=='desc' %}selected{% endif %}>Decrescente (Z-A)</option>
+                <option value="asc" {% if direcao=='asc' %}selected{% endif %}>Crescente (A-Z)</option>
+            </select>
+        </div>
+        <h3>Resultados ({{ resultados|length }})</h3>
+        <div class="card-actions" style="display: flex; gap: 0.5rem; align-items: center;">
+            <button type="button" class="btn btn-sm btn-info" onclick="atualizarTodosOsStatus(this)"
+                title="Sincroniza status e valores de todos os resultados desta página com a API PNCP">
+                🔄 Atualizar Status (Todos)
+            </button>
+            {% if resultados %}
+            <form action="{{ url_for('main.form_limpar_resultados') }}" method="POST" class="inline"
+                onsubmit="return confirm('Tem certeza que deseja remover TODOS os {{ resultados|length }} resultados?')">
+                <button type="submit" class="btn btn-sm btn-danger">🗑️ Limpar Todos</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if resultados %}
+    <div class="results-list">
+        {% for r in resultados %}
+        <div class="result-card {% if r.selecionado_detalhe %}selected{% endif %}">
+            <div class="result-header">
+                <span class="result-numero">{{ r.numero_processo or 'N/A' }}</span>
+                <span
+                    class="badge badge-{{ 'success' if 'Recebendo' in (r.status or '') else 'warning' if 'andamento' in (r.status or '').lower() else 'secondary' }}">
+                    {{ r.status or 'Indefinido' }}
+                </span>
+            </div>
+
+            <h4 class="result-title">{{ r.titulo or 'Sem título' }}</h4>
+
+            <div class="result-details">
+                <p><strong>📍 Órgão/UF:</strong> {{ r.orgao or 'N/A' }} / <strong>{{ r.uf or '-' }}</strong></p>
+
+                {% if r.inicio_propostas %}
+                <p><strong>🚀 Início Propostas:</strong> {{ r.inicio_propostas }}</p>
+                {% endif %}
+
+                {% if r.limite_recebimento %}
+                <p><strong>⏳ Limite Recebimento:</strong> {{ r.limite_recebimento }}</p>
+                {% endif %}
+
+                {% if r.abertura_propostas %}
+                <p><strong>🔔 Abertura Propostas:</strong> {{ r.abertura_propostas }}</p>
+                {% endif %}
+
+                <p><strong>📝 Modalidade:</strong> {{ r.modalidade or 'N/A' }}</p>
+
+                {% if r.valor_estimado %}
+                <p><strong>💰 Valor:</strong> <span class="valor-destaque">{{ r.valor_estimado }}</span></p>
+                {% endif %}
+            </div>
+
+            <!-- Classificação IA -->
+            {% if r.classificacao_ia %}
+            <div
+                class="ia-classificacao-box {% if r.classificacao_ia == 'ADEQUADO' %}ia-adequado{% elif r.classificacao_ia == 'NAO_ADEQUADO' %}ia-nao-adequado{% else %}ia-incerto{% endif %}">
+                <div class="ia-classificacao-header">
+                    <span class="ia-badge">
+                        {% if r.classificacao_ia == 'ADEQUADO' %}
+                        ✅ Adequado
+                        {% elif r.classificacao_ia == 'NAO_ADEQUADO' %}
+                        ❌ Não Adequado
+                        {% else %}
+                        ⚠️ Incerto
+                        {% endif %}
+                    </span>
+                    <small class="ia-data">Classificado em {{ r.classificado_em[:16] if r.classificado_em else 'N/A'
+                        }}</small>
+                </div>
+                <p class="ia-explicacao">{{ r.explicacao_ia }}</p>
+            </div>
+            {% endif %}
+
+            <div class="manual-classification"
+                style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px dashed #e2e8f0;">
+                <small style="color: #64748b; display: block; margin-bottom: 0.4rem;"><strong>🎯 Alterar
+                        classificação:</strong></small>
+                <div style="display: flex; gap: 0.4rem;">
+                    <button class="btn btn-xs btn-outline-success"
+                        onclick="classificarManual({{ r.id }}, 'ADEQUADO', this)" title="Marcar como Adequado" {% if
+                        r.classificacao_ia=='ADEQUADO' %}style="background: #dcfce7; border-color: #22c55e;" {% endif
+                        %}>✅</button>
+                    <button class="btn btn-xs btn-outline-danger"
+                        onclick="classificarManual({{ r.id }}, 'NAO_ADEQUADO', this)" title="Marcar como Não Adequado"
+                        {% if r.classificacao_ia=='NAO_ADEQUADO' %}style="background: #fee2e2; border-color: #ef4444;"
+                        {% endif %}>❌</button>
+                    <button class="btn btn-xs btn-outline-warning"
+                        onclick="classificarManual({{ r.id }}, 'INCERTO', this)" title="Marcar como Incerto" {% if
+                        r.classificacao_ia=='INCERTO' %}style="background: #fef3c7; border-color: #f59e0b;" {% endif
+                        %}>⚠️</button>
+                </div>
+            </div>
+
+            <div class="result-actions">
+                {% if r.url_processo %}
+                <a href="{{ r.url_processo }}" target="_blank" class="btn btn-sm btn-secondary">🔗 Ver Portal</a>
+                {% endif %}
+
+                <button type="button" class="btn btn-sm btn-outline-info"
+                    onclick="window.atualizarResultado({{ r.id }}, this)"
+                    title="Atualizar dados deste processo diretamente do PNCP">
+                    🔄
+                </button>
+
+                {% if not r.selecionado_detalhe %}
+                <button type="button" class="btn btn-sm btn-primary btn-criar-oportunidade"
+                    data-resultado-id="{{ r.id }}" onclick="criarOportunidade(this, {{ r.id }})">
+                    💼 Criar Oportunidade
+                </button>
+                {% else %}
+                <span class="badge badge-info">✓ Oportunidade Criada</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty-state">Nenhum resultado encontrado. Execute uma pesquisa primeiro!</p>
+    {% endif %}
+</div>
+
+<script>
+    // Função para selecionar/deselecionar toda a região
+    function toggleRegion(checkbox, regionName) {
+        const container = document.querySelector(`.region-ufs[data-region="${regionName}"]`);
+        const inputs = container.querySelectorAll('input[type="checkbox"]');
+        inputs.forEach(input => {
+            input.checked = checkbox.checked;
+        });
+    }
+
+    // Máscara de moeda
+    function formatCurrency(value) {
+        if (!value) return '';
+        // Converte para string e limpa
+        let n = value.toString().replace(/\D/g, '');
+        if (n.length === 0) return '';
+
+        // Garante que tenha pelo menos 3 dígitos para centavos
+        while (n.length < 3) n = '0' + n;
+
+        let cents = n.slice(-2);
+        let integers = n.slice(0, -2);
+
+        // Remove zeros à esquerda
+        integers = parseInt(integers).toString();
+
+        // Adiciona pontos de milhar
+        integers = integers.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+
+        return 'R$ ' + integers + ',' + cents;
+    }
+
+    function setupCurrencyInput(displayId, hiddenId) {
+        const display = document.getElementById(displayId);
+        const hidden = document.getElementById(hiddenId);
+
+        if (!display || !hidden) return;
+
+        // Se já tiver valor (do backend), formata inicial
+        if (hidden.value) {
+            const val = Math.round(parseFloat(hidden.value) * 100);
+            display.value = formatCurrency(val);
+        }
+
+        display.addEventListener('input', function (e) {
+            let original = e.target.value.replace(/\D/g, '');
+            if (original.length > 0) {
+                e.target.value = formatCurrency(original);
+                let v = parseInt(original) / 100;
+                hidden.value = v.toFixed(2);
+            } else {
+                e.target.value = '';
+                hidden.value = '';
+            }
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        setupCurrencyInput('valor_min_display', 'valor_min');
+        setupCurrencyInput('valor_max_display', 'valor_max');
+
+        // Auto-submit ao mudar ordenação
+        document.querySelectorAll('.sort-trigger').forEach(select => {
+            select.addEventListener('change', function () {
+                document.getElementById('filter-form').submit();
+            });
+        });
+
+        // Carregar modelos e estatísticas
+        carregarModelos();
+        carregarEstatisticasIA();
+    });
+
+    async function carregarModelos() {
+        const select = document.getElementById('model-select');
+        if (!select) return;
+
+        try {
+            const response = await fetch('/api/ia/modelos');
+            const modelos = await response.json();
+
+            // Salva o valor selecionado se houver
+            const lastSelected = localStorage.getItem('last_genkit_model') || select.value;
+
+            select.innerHTML = modelos.map(m =>
+                `<option value="${m.id}" ${m.id === lastSelected ? 'selected' : ''}>${m.name}</option>`
+            ).join('');
+
+            // Salva escolha
+            select.addEventListener('change', () => {
+                localStorage.setItem('last_genkit_model', select.value);
+            });
+        } catch (e) {
+            console.error('Erro ao carregar modelos:', e);
+            select.innerHTML = '<option value="gemini-2.0-flash">Gemini 2.0 Flash (Padrão)</option>';
+        }
+    }
+
+    async function carregarEstatisticasIA() {
+        try {
+            const response = await fetch('/api/ia/estatisticas');
+            const stats = await response.json();
+
+            const container = document.getElementById('stats-content');
+            if (!container) return;
+
+            container.innerHTML = `
+                <span style="background: #f0fdf4; padding: 0.3rem 0.6rem; border-radius: 4px; color: #166534;">
+                    ✅ Adequados: <strong>${stats.adequado || 0}</strong>
+                </span>
+                <span style="background: #fef2f2; padding: 0.3rem 0.6rem; border-radius: 4px; color: #991b1b;">
+                    ❌ Não Adequados: <strong>${stats.nao_adequado || 0}</strong>
+                </span>
+                <span style="background: #fffbeb; padding: 0.3rem 0.6rem; border-radius: 4px; color: #92400e;">
+                    ⚠️ Incertos: <strong>${stats.incerto || 0}</strong>
+                </span>
+                <span style="background: #f1f5f9; padding: 0.3rem 0.6rem; border-radius: 4px; color: #475569;">
+                    ⏳ Pendentes: <strong>${stats.nao_classificado || 0}</strong>
+                </span>
+                <span style="background: #e2e8f0; padding: 0.3rem 0.6rem; border-radius: 4px; color: #334155;">
+                    📋 Total: <strong>${stats.total || 0}</strong>
+                </span>
+            `;
+        } catch (e) {
+            console.error('Erro ao carregar estatísticas:', e);
+            const container = document.getElementById('stats-content');
+            if (container) {
+                container.innerHTML = '<span style="color: #ef4444;">Erro ao carregar estatísticas</span>';
+            }
+        }
+    }
+
+    // ==================== FUNÇÕES DE IA ====================
+
+    function showFeedback(message, type = 'info') {
+        const feedbackDiv = document.getElementById('ia-feedback');
+        const contentDiv = document.getElementById('ia-feedback-content');
+
+        feedbackDiv.style.display = 'block';
+        feedbackDiv.style.background = type === 'error' ? '#fef2f2' :
+            type === 'success' ? '#f0fdf4' : '#f0f9ff';
+        contentDiv.innerHTML = message;
+    }
+
+    function hideFeedback() {
+        document.getElementById('ia-feedback').style.display = 'none';
+    }
+
+    async function atualizarTodosOsStatus(btn) {
+        const cards = document.querySelectorAll('.result-card');
+        if (cards.length === 0) return;
+
+        if (!confirm(`Deseja atualizar o status de todos os ${cards.length} resultados? Isso fará uma consulta na API PNCP para cada um.`)) return;
+
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+
+        let count = 0;
+        let total = cards.length;
+
+        for (const card of cards) {
+            const updateBtn = card.querySelector('.btn-outline-info');
+            if (updateBtn) {
+                const idMatch = updateBtn.getAttribute('onclick').match(/atualizarResultado\((\d+)/);
+                if (idMatch) {
+                    const id = idMatch[1];
+                    btn.innerHTML = `⏳ Processando ${count + 1}/${total}...`;
+
+                    try {
+                        // Faz a chamada individual e espera (sequencial para não dar 429 rate limit)
+                        const response = await fetch(`/api/resultados/${id}/atualizar`, { method: 'POST' });
+                        if (response.ok) count++;
+
+                        // Pequeno delay para ser gentil com a API
+                        await new Promise(r => setTimeout(r, 300));
+                    } catch (e) {
+                        console.error('Erro ao atualizar item', id, e);
+                    }
+                }
+            }
+        }
+
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        alert(`${count} resultados foram atualizados com sucesso!`);
+        location.reload();
+    }
+
+    async function criarOportunidade(btn, resultadoId) {
+        const textoOriginal = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = '⏳ Criando...';
+
+        try {
+            const response = await fetch(`/api/oportunidade/criar/${resultadoId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                // Sucesso - substitui o botão por badge
+                const parent = btn.parentElement;
+                btn.remove();
+                const badge = document.createElement('span');
+                badge.className = 'badge badge-info';
+                badge.textContent = `✓ ${data.codigo}`;
+                parent.appendChild(badge);
+
+                // Mostra notificação temporária
+                showNotification(`✅ ${data.message}`, 'success');
+            } else {
+                btn.disabled = false;
+                btn.textContent = textoOriginal;
+                showNotification(`❌ ${data.error || 'Erro ao criar oportunidade'}`, 'error');
+            }
+        } catch (e) {
+            btn.disabled = false;
+            btn.textContent = textoOriginal;
+            showNotification(`❌ Erro de conexão: ${e.message}`, 'error');
+        }
+    }
+
+    function showNotification(message, type = 'info') {
+        // Cria notificação flutuante temporária
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            background: ${type === 'error' ? '#fef2f2' : type === 'success' ? '#f0fdf4' : '#f0f9ff'};
+            border: 1px solid ${type === 'error' ? '#fecaca' : type === 'success' ? '#bbf7d0' : '#bfdbfe'};
+            color: ${type === 'error' ? '#991b1b' : type === 'success' ? '#166534' : '#1e40af'};
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 9999;
+            animation: slideIn 0.3s ease;
+        `;
+        notification.innerHTML = message;
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+            notification.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    }
+
+    async function salvarPrompt() {
+        const prompt = document.getElementById('prompt-empresa').value.trim();
+        if (!prompt) {
+            alert('Digite o prompt da empresa antes de salvar.');
+            return;
+        }
+
+        const btn = document.getElementById('btn-salvar-prompt');
+        btn.disabled = true;
+        btn.textContent = '⏳ Salvando...';
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 segundos de timeout
+
+        try {
+            const response = await fetch('/api/configuracao-empresa', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt_empresa: prompt }),
+                signal: controller.signal
+            });
+
+            const data = await response.json();
+            clearTimeout(timeoutId);
+
+            if (response.ok) {
+                showFeedback('✅ Prompt salvo com sucesso!', 'success');
+                document.getElementById('btn-classificar').disabled = false;
+                setTimeout(hideFeedback, 3000);
+            } else {
+                showFeedback('❌ Erro: ' + (data.error || 'Falha ao salvar'), 'error');
+            }
+        } catch (e) {
+            if (e.name === 'AbortError') {
+                showFeedback('❌ Erro: O servidor demorou muito para responder. Verifique se há processos do Python travados.', 'error');
+            } else {
+                showFeedback('❌ Erro de conexão: ' + e.message, 'error');
+            }
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '💾 Salvar Prompt';
+        }
+    }
+
+    async function otimizarPrompt() {
+        const prompt = document.getElementById('prompt-empresa').value.trim();
+        if (!prompt) {
+            alert('Digite um prompt inicial para que a IA possa melhorá-lo.');
+            return;
+        }
+
+        const btn = document.getElementById('btn-otimizar');
+        btn.disabled = true;
+        btn.textContent = '⏳ Otimizando...';
+
+        try {
+            const response = await fetch('/api/ia/otimizar-prompt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt_atual: prompt })
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.promptOtimizado) {
+                // Mostra o prompt otimizado para o usuário aprovar
+                const melhorias = data.melhorias ? data.melhorias.join('<br>• ') : '';
+                showFeedback(`
+                    <strong>✨ Prompt Otimizado pela IA:</strong>
+                    <div style="background: white; padding: 1rem; border-radius: 4px; margin: 0.5rem 0; border-left: 3px solid #3b82f6;">
+                        ${data.promptOtimizado}
+                    </div>
+                    <strong>Melhorias aplicadas:</strong><br>• ${melhorias}
+                    <div style="margin-top: 1rem;">
+                        <button class="btn btn-sm btn-primary" onclick="aplicarPromptOtimizado('${encodeURIComponent(data.promptOtimizado)}')">
+                            ✅ Usar Este Prompt
+                        </button>
+                        <button class="btn btn-sm btn-secondary" onclick="hideFeedback()">
+                            ❌ Manter Original
+                        </button>
+                    </div>
+                `, 'info');
+            } else {
+                showFeedback('❌ Erro: ' + (data.error || 'Falha ao otimizar'), 'error');
+            }
+        } catch (e) {
+            showFeedback('❌ Erro: ' + e.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '✨ Melhorar Prompt com IA';
+        }
+    }
+
+    function aplicarPromptOtimizado(promptEncoded) {
+        const prompt = decodeURIComponent(promptEncoded);
+        document.getElementById('prompt-empresa').value = prompt;
+        hideFeedback();
+        showFeedback('✅ Prompt atualizado! Clique em "Salvar Prompt" para confirmar.', 'success');
+        setTimeout(hideFeedback, 3000);
+    }
+
+    async function classificarResultados() {
+        // Buscar estatísticas primeiro
+        let stats = {};
+        try {
+            const statsRes = await fetch('/api/ia/estatisticas');
+            stats = await statsRes.json();
+        } catch (e) {
+            console.error('Erro ao buscar estatísticas:', e);
+        }
+
+        const pendentes = stats.nao_classificado || 0;
+        if (pendentes === 0) {
+            showFeedback('ℹ️ Todos os resultados já foram classificados!', 'info');
+            return;
+        }
+
+        if (!confirm(`Deseja classificar ${pendentes} resultado(s) não classificado(s) usando IA?\n\nIsso será processado em lotes de 20 e pode demorar alguns minutos.`)) {
+            return;
+        }
+
+        const btn = document.getElementById('btn-classificar');
+        btn.disabled = true;
+        btn.textContent = '⏳ Classificando...';
+
+        showFeedback(`🔄 Classificando ${pendentes} resultado(s) em lotes de 20... Aguarde, isso pode demorar.`, 'info');
+
+        const model = document.getElementById('model-select').value;
+
+        try {
+            const response = await fetch('/api/ia/classificar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model: model })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                if (data.classificados > 0) {
+                    // Resumo das classificações
+                    let adequados = 0, nao_adequados = 0, incertos = 0;
+                    data.classificacoes.forEach(c => {
+                        if (c.classificacao === 'ADEQUADO') adequados++;
+                        else if (c.classificacao === 'NAO_ADEQUADO') nao_adequados++;
+                        else incertos++;
+                    });
+
+                    showFeedback(`
+                        ✅ <strong>${data.classificados} de ${data.total}</strong> resultado(s) classificado(s)!<br>
+                        <div style="margin-top: 0.5rem;">
+                            <span style="color: #166534;">✅ Adequados: ${adequados}</span> | 
+                            <span style="color: #991b1b;">❌ Não Adequados: ${nao_adequados}</span> | 
+                            <span style="color: #92400e;">⚠️ Incertos: ${incertos}</span>
+                        </div>
+                        <div style="margin-top: 0.5rem;">Recarregando página...</div>
+                    `, 'success');
+                    setTimeout(() => location.reload(), 2500);
+                } else {
+                    showFeedback('ℹ️ Nenhum resultado pendente para classificar.', 'info');
+                }
+            } else {
+                showFeedback('❌ Erro: ' + (data.error || 'Falha na classificação'), 'error');
+            }
+        } catch (e) {
+            showFeedback('❌ Erro: ' + e.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '🎯 Classificar Resultados';
+        }
+    }
+
+    async function limparClassificacoes() {
+        if (!confirm('Tem certeza que deseja limpar TODAS as classificações de IA? Esta ação não pode ser desfeita.')) {
+            return;
+        }
+
+        const btn = document.getElementById('btn-limpar-ia');
+        btn.disabled = true;
+
+        try {
+            const response = await fetch('/api/ia/limpar-classificacoes', {
+                method: 'POST'
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                showFeedback(`✅ Classificações limpas! Recarregando...`, 'success');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showFeedback('❌ Erro: ' + (data.error || 'Falha ao limpar'), 'error');
+            }
+        } catch (e) {
+            showFeedback('❌ Erro: ' + e.message, 'error');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    async function classificarManual(id, classificacao, btn) {
+        // Desabilita os botões do grupo
+        const container = btn.parentElement;
+        const buttons = container.querySelectorAll('button');
+        buttons.forEach(b => b.disabled = true);
+
+        try {
+            const response = await fetch(`/api/ia/classificar-manual/${id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ classificacao: classificacao })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                showNotification('✅ Classificação atualizada!', 'success');
+                // Atualiza as estatísticas visualmente (opcional, melhor recarregar ou atualizar o card)
+                // Para feedback imediato, vamos apenas recarregar as estatísticas e dar um destaque
+                carregarEstatisticasIA();
+
+                // Recarrega em 1s para ver a mudança no card (cores, explicação)
+                setTimeout(() => location.reload(), 800);
+            } else {
+                alert('Erro: ' + (data.error || 'Falha ao atualizar'));
+                buttons.forEach(b => b.disabled = false);
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Erro de conexão');
+            buttons.forEach(b => b.disabled = false);
+        }
+    }
+</script>
+{% endblock %}

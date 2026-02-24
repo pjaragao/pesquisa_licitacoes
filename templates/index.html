@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Pesquisa de Licitações{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <h2>Dashboard</h2>
+
+    <!-- Cards de Estatísticas -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon">🔑</div>
+            <div class="stat-info">
+                <span class="stat-value">{{ stats.total_palavras }}</span>
+                <span class="stat-label">Palavras-Chave</span>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon">📋</div>
+            <div class="stat-info">
+                <span class="stat-value">{{ stats.total_resultados }}</span>
+                <span class="stat-label">Resultados</span>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon">💼</div>
+            <div class="stat-info">
+                <span class="stat-value">{{ stats.total_oportunidades }}</span>
+                <span class="stat-label">Oportunidades</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ações Rápidas -->
+    <div class="quick-actions">
+        <h3>Ações Rápidas</h3>
+        <div class="action-buttons">
+            <form action="{{ url_for('main.form_pesquisar') }}" method="POST" class="inline-form">
+                <input type="text" name="termo" placeholder="Digite um termo para pesquisar..." required>
+                <select name="status" class="form-select"
+                    style="padding: 0.5rem; border-radius: 4px; border: 1px solid #ddd;">
+                    <option value="12">Recebendo Propostas</option>
+                    <option value="1">Em Andamento</option>
+                    <option value="3">Em Republicação</option>
+                    <option value="2">Finalizado</option>
+                    <option value="13">Iminência de deserto</option>
+                    <option value="">Todos os Status</option>
+                </select>
+                <button type="submit" class="btn btn-primary">🔍 Pesquisar</button>
+            </form>
+
+            {% if palavras %}
+            <form action="/api/pesquisar-todas" method="POST" class="inline-form" id="form-pesquisar-todas">
+                <select name="status_todas" id="status_todas" class="form-select"
+                    style="padding: 0.5rem; border-radius: 4px; border: 1px solid #ddd;">
+                    <option value="12">Recebendo Propostas</option>
+                    <option value="1">Em Andamento</option>
+                    <option value="3">Em Republicação</option>
+                    <option value="2">Finalizado</option>
+                    <option value="13">Iminência de deserto</option>
+                    <option value="">Todos os Status</option>
+                </select>
+                <button type="button" class="btn btn-secondary" onclick="pesquisarTodas()">
+                    🔄 Pesquisar Todas as Palavras
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="dashboard-grid">
+        <!-- Últimos Resultados -->
+        <div class="dashboard-card">
+            <h3>📋 Últimos Resultados</h3>
+            {% if resultados %}
+            <ul class="result-list">
+                {% for r in resultados %}
+                <li class="result-item-mini">
+                    <div class="result-title">{{ r.titulo[:60] }}{% if r.titulo|length > 60 %}...{% endif %}</div>
+                    <div class="result-meta">
+                        <span class="badge badge-{{ 'success' if 'Recebendo' in r.status else 'secondary' }}">{{
+                            r.status or 'N/A' }}</span>
+                        <span>{{ r.orgao[:30] }}{% if r.orgao|length > 30 %}...{% endif %}</span>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+            <a href="{{ url_for('main.pagina_resultados') }}" class="btn btn-link">Ver todos →</a>
+            {% else %}
+            <p class="empty-state">Nenhum resultado ainda. Execute uma pesquisa!</p>
+            {% endif %}
+        </div>
+
+        <!-- Últimas Oportunidades -->
+        <div class="dashboard-card">
+            <h3>💼 Últimas Oportunidades</h3>
+            {% if oportunidades %}
+            <ul class="result-list">
+                {% for o in oportunidades %}
+                <li class="result-item-mini">
+                    <div class="result-title">
+                        <strong>{{ o.codigo }}</strong> - {{ o.titulo[:40] }}{% if o.titulo|length > 40 %}...{% endif %}
+                    </div>
+                    <div class="result-meta">
+                        <span>{{ o.orgao[:30] }}{% if o.orgao|length > 30 %}...{% endif %}</span>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+            <a href="{{ url_for('main.pagina_oportunidades') }}" class="btn btn-link">Ver todas →</a>
+            {% else %}
+            <p class="empty-state">Nenhuma oportunidade criada ainda.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Palavras-Chave Ativas -->
+    <div class="dashboard-card full-width">
+        <h3>🔑 Palavras-Chave Ativas</h3>
+        {% if palavras %}
+        <div class="tags">
+            {% for p in palavras %}
+            <span class="tag">
+                {{ p.termo }}
+                {% if p.ultima_pesquisa %}
+                <small>(última: {{ p.ultima_pesquisa[:10] }})</small>
+                {% endif %}
+            </span>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="empty-state">Nenhuma palavra-chave cadastrada. <a
+                href="{{ url_for('main.pagina_palavras_chave') }}">Adicionar →</a></p>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    async function pesquisarTodas() {
+        if (!confirm('Deseja pesquisar com todas as palavras-chave? Isso pode demorar alguns minutos.')) {
+            return;
+        }
+
+        const btn = event.target;
+        btn.disabled = true;
+        btn.textContent = '⏳ Pesquisando... (pode demorar)';
+
+        try {
+            // Obtém o status selecionado
+            const statusSelect = document.getElementById('status_todas');
+            const statusValue = statusSelect ? statusSelect.value : '12';
+
+            // Envia com FormData
+            const formData = new FormData();
+            formData.append('status_todas', statusValue);
+
+            // Cria AbortController com timeout de 5 minutos
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutos
+
+            const response = await fetch('/api/pesquisar-todas', {
+                method: 'POST',
+                body: formData,
+                signal: controller.signal
+            });
+
+            clearTimeout(timeoutId);
+
+            const data = await response.json();
+
+            if (data.error) {
+                alert('Erro: ' + data.error);
+            } else {
+                alert(`Pesquisa concluída!\n\nPalavras processadas: ${data.palavras_processadas}\nTotal encontrados: ${data.total_encontrados}\nNovos salvos: ${data.novos_salvos}`);
+                location.reload();
+            }
+        } catch (e) {
+            if (e.name === 'AbortError') {
+                alert('A pesquisa excedeu o tempo limite de 5 minutos. Tente com menos palavras-chave ou verifique sua conexão.');
+            } else {
+                alert('Erro na pesquisa: ' + e.message);
+            }
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '🔄 Pesquisar Todas as Palavras';
+        }
+    }
+</script>
+{% endblock %}

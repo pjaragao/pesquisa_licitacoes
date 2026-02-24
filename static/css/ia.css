@@ -1,0 +1,99 @@
+/* ==========================================
+   Classificação IA - Estilos
+   ========================================== */
+
+.ia-section {
+    margin-top: 0.5rem;
+}
+
+.ia-prompt-area textarea {
+    width: 100%;
+    padding: 0.8rem;
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius);
+    font-size: 0.95rem;
+    line-height: 1.5;
+    resize: vertical;
+    transition: border-color 0.3s ease;
+}
+
+.ia-prompt-area textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.input-full {
+    width: 100%;
+    padding: 0.8rem;
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius);
+    font-size: 0.95rem;
+}
+
+.btn-info {
+    background: linear-gradient(135deg, #17a2b8, #138496);
+    color: white;
+}
+
+.btn-info:hover {
+    transform: translateY(-2px);
+}
+
+/* Boxes de Classificação nos Cards */
+.ia-classificacao-box {
+    padding: 0.8rem 1rem;
+    border-radius: var(--radius);
+    margin-bottom: 1rem;
+    border-left: 4px solid;
+}
+
+.ia-adequado {
+    background: #f0fdf4;
+    border-left-color: #22c55e;
+}
+
+.ia-nao-adequado {
+    background: #fef2f2;
+    border-left-color: #ef4444;
+}
+
+.ia-incerto {
+    background: #fffbeb;
+    border-left-color: #f59e0b;
+}
+
+.ia-classificacao-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.ia-badge {
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.ia-adequado .ia-badge {
+    color: #166534;
+}
+
+.ia-nao-adequado .ia-badge {
+    color: #991b1b;
+}
+
+.ia-incerto .ia-badge {
+    color: #92400e;
+}
+
+.ia-data {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.ia-explicacao {
+    font-size: 0.9rem;
+    color: #444;
+    margin: 0;
+    line-height: 1.5;
+}

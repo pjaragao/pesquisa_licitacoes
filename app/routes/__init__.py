@@ -1,0 +1,3 @@
+"""
+Routes - Inicializador do módulo
+"""

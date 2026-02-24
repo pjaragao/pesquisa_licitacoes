@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}Oportunidades - Pesquisa de Licitações{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>💼 Oportunidades</h2>
+    <p>Licitações selecionadas para análise detalhada.</p>
+</div>
+
+<!-- Lista de oportunidades -->
+<div class="card">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <h3>Oportunidades ({{ oportunidades|length }})</h3>
+        {% if oportunidades %}
+        <form action="{{ url_for('main.form_limpar_oportunidades') }}" method="POST" style="display: inline;"
+            onsubmit="return confirm('Deseja apagar TODAS as oportunidades? Esta ação não pode ser desfeita.');">
+            <button type="submit" class="btn btn-danger btn-sm">🗑️ Limpar Todas</button>
+        </form>
+        {% endif %}
+    </div>
+
+    {% if oportunidades %}
+    <div class="opportunities-grid">
+        {% for o in oportunidades %}
+        <div class="opportunity-card">
+            <div class="opportunity-header">
+                <span class="opportunity-code">{{ o.codigo }}</span>
+                <span class="badge badge-{{ 'success' if 'Recebendo' in (o.status or '') else 'secondary' }}">
+                    {{ o.status or 'N/A' }}
+                </span>
+            </div>
+
+            <h4>{{ o.titulo[:80] }}{% if o.titulo|length > 80 %}...{% endif %}</h4>
+
+            <div class="opportunity-info">
+                <p><strong>📍 Órgão:</strong> {{ o.orgao or 'N/A' }}</p>
+                <p><strong>📝 Tipo:</strong> {{ o.tipo or 'N/A' }}</p>
+                <p><strong>📍 UF:</strong> {{ o.uf or 'N/A' }} - {{ o.municipio or 'N/A' }}</p>
+                {% if o.valor_estimado %}
+                <p><strong>💰 Valor Estimado:</strong> {{ o.valor_estimado }}</p>
+                {% endif %}
+            </div>
+
+            <div class="opportunity-dates">
+                <h5>📅 Datas Importantes</h5>
+                <ul>
+                    {% if o.data_publicacao %}<li><strong>Publicação:</strong> {{ o.data_publicacao }}</li>{% endif %}
+                    {% if o.inicio_propostas %}<li><strong>Início Propostas:</strong> {{ o.inicio_propostas }}</li>{%
+                    endif %}
+                    {% if o.abertura_propostas %}<li><strong>Abertura:</strong> {{ o.abertura_propostas }}</li>{% endif
+                    %}
+                    {% if o.limite_recebimento_propostas %}<li><strong>Limite Recebimento:</strong> {{
+                        o.limite_recebimento_propostas }}</li>{% endif %}
+                    {% if o.limite_impugnacoes %}<li><strong>Limite Impugnações:</strong> {{ o.limite_impugnacoes }}
+                    </li>{% endif %}
+                    {% if not o.data_publicacao and not o.abertura_propostas and not o.inicio_propostas %}
+                    <li><em>Nenhuma data disponível</em></li>
+                    {% endif %}
+                </ul>
+            </div>
+
+            <div class="opportunity-people">
+                <h5>👤 Responsáveis</h5>
+                <ul>
+                    {% if o.pregoeiro %}<li><strong>Pregoeiro:</strong> {{ o.pregoeiro }}</li>{% endif %}
+                    {% if o.autoridade_competente %}<li><strong>Autoridade:</strong> {{ o.autoridade_competente }}</li>
+                    {% endif %}
+                    {% if not o.pregoeiro and not o.autoridade_competente %}
+                    <li><em>Não informado</em></li>
+                    {% endif %}
+                </ul>
+            </div>
+
+            {% if o.pasta_local %}
+            <div class="opportunity-docs">
+                <h5>📁 Documentos</h5>
+                <p>📂 {{ o.pasta_local }}</p>
+            </div>
+            {% endif %}
+
+            <div class="opportunity-actions">
+                {% if o.url_processo %}
+                <a href="{{ o.url_processo }}" target="_blank" class="btn btn-sm btn-primary">
+                    🔗 Ver no Portal
+                </a>
+                {% endif %}
+
+                {% if o.pasta_local %}
+                <button class="btn btn-sm btn-secondary" onclick="copyPath('{{ o.pasta_local }}')">
+                    📋 Copiar Caminho
+                </button>
+                {% endif %}
+
+                {% if not o.analisado_ia %}
+                <span class="badge badge-warning">🤖 Aguardando Análise IA</span>
+                {% else %}
+                <span class="badge badge-success">✓ Analisado</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty-state">
+        Nenhuma oportunidade criada ainda.<br>
+        Vá até <a href="{{ url_for('main.pagina_resultados') }}">Resultados</a> e clique em "Criar Oportunidade" para
+        começar.
+    </p>
+    {% endif %}
+</div>
+
+<script>
+    function copyPath(path) {
+        navigator.clipboard.writeText(path).then(() => {
+            alert('Caminho copiado: ' + path);
+        });
+    }
+</script>
+{% endblock %}
