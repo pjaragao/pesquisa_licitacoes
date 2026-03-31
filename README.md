@@ -1,33 +1,31 @@
-# 🔍 Sistema de Pesquisa de Licitações - Portal de Compras Públicas
+# 🔍 Pesquisa de Licitações - API PNCP
 
-Este sistema automatiza a busca, monitoramento e classificação de licitações públicas, integrando-se diretamente com a API do **PNCP (Portal Nacional de Contratações Públicas)**. Além da pesquisa, o sistema utiliza Inteligência Artificial (via **Genkit**) para classificar as oportunidades de acordo com o perfil da sua empresa.
+Sistema web para busca, monitoramento e classificação inteligente de licitações públicas brasileiras, integrando diretamente com a **API do PNCP** (Portal Nacional de Contratações Públicas) e utilizando **IA generativa** (Gemini via Genkit) para classificação automática de oportunidades.
 
 ## 🚀 Funcionalidades
 
-- **Busca Automatizada**: Pesquisa em múltiplos estados (UFs) simultaneamente usando palavras-chave.
-- **Gestão de Palavras-Chave**: Painel para cadastrar e monitorar termos de interesse.
-- **Filtros Avançados**: Filtre resultados por valor, data, status, UF e classificação de IA.
-- **Classificação por IA**: Avaliação automática de editais (Adequado, Não Adequado ou Incerto) com base em um prompt personalizado da empresa.
-- **Gestão de Oportunidades**: Salve e gerencie licitações de interesse para acompanhamento posterior.
-- **Dashboard de Estatísticas**: Visualize o volume de licitações por status e relevância.
+- **Busca Automatizada via API PNCP** — Pesquisa em múltiplos estados (UFs) simultaneamente usando palavras-chave, com suporte a buscas incrementais.
+- **Gestão de Palavras-Chave** — Painel para cadastrar, ativar/desativar e monitorar termos de interesse.
+- **Filtros Avançados** — Filtre resultados por valor, data, status, UF, classificação de IA e ordenação flexível.
+- **Classificação por IA** — Avaliação automática de editais (Adequado, Não Adequado ou Incerto) com base em um prompt personalizado que descreve o perfil da empresa.
+- **Otimização de Prompt** — IA que sugere melhorias no prompt de classificação da empresa.
+- **Gestão de Oportunidades** — Salve e gerencie licitações de interesse para acompanhamento.
+- **Dashboard de Estatísticas** — Visualize o volume de licitações encontradas e classificadas.
 
-## 🛠️ Tecnologias Utilizadas
+## 🛠️ Tecnologias
 
-### Backend (Python)
-- **Flask**: Framework web para a interface e API.
-- **SQLite**: Banco de dados leve para armazenamento local.
-- **Requests / Selenium**: Integração com a API do PNCP e scrapers auxiliares.
-- **Python-dotenv**: Gerenciamento de variáveis de ambiente.
-
-### IA & Classificação (Genkit/Node.js)
-- **Firebase Genkit**: Framework para fluxos de IA generativa.
-- **Node.js**: Backend para o servidor de classificação.
+| Camada | Tecnologia |
+|--------|------------|
+| Backend | Python 3.9+ / Flask |
+| Banco de Dados | SQLite |
+| API de Dados | API PNCP (Portal Nacional de Contratações Públicas) |
+| IA / Classificação | Firebase Genkit (Node.js/TypeScript) + Google Gemini |
+| Frontend | HTML (Jinja2) + CSS + JS puro |
 
 ## 📋 Pré-requisitos
 
 - Python 3.9+
 - Node.js 18+ (para o servidor de IA)
-- Navegador Google Chrome (caso utilize as funções de scraper legadas)
 
 ## 🔧 Instalação
 
@@ -45,42 +43,58 @@ Este sistema automatiza a busca, monitoramento e classificação de licitações
    ```
 
 3. **Configure as variáveis de ambiente**:
-   Crie um arquivo `.env` na raiz do projeto com as seguintes chaves (conforme necessário):
+   Crie um arquivo `.env` na raiz do projeto:
    ```env
-   FLASK_APP=main.py
-   FLASK_DEBUG=True
-   FLASK_SECRET_KEY=sua_chave_secreta
-   GENKIT_URL=http://localhost:3100
+   GOOGLE_GENAI_API_KEY=sua_chave_api_gemini
+   GENKIT_PORT=3400
    ```
+   > Obtenha sua chave em: https://aistudio.google.com/app/apikey
 
-4. **Inicie o servidor de IA (Genkit)**:
+4. **Instale as dependências do servidor de IA**:
    ```bash
    cd genkit-server
    npm install
-   npm run dev
    ```
 
 ## 🏃 Como Executar
 
-1. Com o servidor Genkit rodando (passo 4 acima), volte à raiz e inicie o app Flask:
+1. **Inicie o servidor de IA** (em um terminal):
+   ```bash
+   cd genkit-server
+   npm run dev
+   ```
+
+2. **Inicie a aplicação Flask** (em outro terminal):
    ```bash
    python main.py
    ```
 
-2. Acesse a aplicação em: `http://localhost:5000`
+3. Acesse: `http://localhost:5000`
 
 ## 📂 Estrutura do Projeto
 
-- `app/`: Lógica central (rotas, modelos, serviços).
-- `database/`: Scripts de inicialização e migração do SQLite.
-- `genkit-server/`: Código do servidor de Inteligência Artificial.
-- `static/`: Arquivos CSS, JS e imagens.
-- `templates/`: Templates HTML do Flask.
-- `main.py`: Ponto de entrada da aplicação.
+```
+├── main.py                     # Ponto de entrada da aplicação
+├── requirements.txt            # Dependências Python
+├── app/
+│   ├── config.py               # Configurações globais
+│   ├── routes/api.py           # Todas as rotas (páginas + API)
+│   ├── models/                 # Modelos de dados (SQLite)
+│   └── services/               # Lógica de negócio
+│       ├── pncp_api_client.py  # Cliente HTTP da API PNCP
+│       ├── pncp_search_service.py  # Pesquisa e filtragem
+│       ├── search_manager.py   # Buscas em background
+│       ├── genkit_service.py   # Integração com IA
+│       └── oportunidade_service.py
+├── database/                   # Schema e migrações do SQLite
+├── genkit-server/              # Servidor de IA (Genkit/TypeScript)
+├── templates/                  # Templates HTML (Jinja2)
+└── static/                     # CSS e JavaScript
+```
 
 ## 🤝 Contribuição
 
-Contribuições são bem-vindas! Sinta-se à vontade para abrir Issues ou enviar Pull Requests.
+Contribuições são bem-vindas! Abra Issues ou envie Pull Requests.
 
 ---
 Desenvolvido para otimizar o acompanhamento de compras públicas no Brasil.

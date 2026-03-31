@@ -1,3 +1,0 @@
-"""
-Scrapers - Inicializador do módulo
-"""

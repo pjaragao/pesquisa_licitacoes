@@ -35,10 +35,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Debugging
-debug_screenshot.png
-debug_page.html
-
 # IDEs
 .vscode/
 .idea/

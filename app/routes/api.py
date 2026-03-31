@@ -13,8 +13,6 @@ from app.models.palavra_chave import PalavraChave
 from app.models.resultado_pesquisa import ResultadoPesquisa
 from app.models.oportunidade import Oportunidade
 from app.models.configuracao_empresa import ConfiguracaoEmpresa
-# Scraper desativado - usar API PNCP via search_manager
-# from app.scrapers.pesquisa_scraper import PesquisaScraper
 from app.services.oportunidade_service import OportunidadeService
 from app.services.search_manager import search_manager
 from app.services.genkit_service import genkit_service
