@@ -24,6 +24,11 @@ Sistema web para busca, monitoramento e classificação inteligente de licitaç�
 
 ## 📋 Pré-requisitos
 
+### Com Docker (recomendado)
+- Docker
+- Docker Compose
+
+### Sem Docker
 - Python 3.9+
 - Node.js 18+ (para o servidor de IA)
 
@@ -35,14 +40,7 @@ Sistema web para busca, monitoramento e classificação inteligente de licitaç�
    cd pesquisa_licitacoes
    ```
 
-2. **Configure o ambiente Python**:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # No Windows: venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
-
-3. **Configure as variáveis de ambiente**:
+2. **Configure as variáveis de ambiente**:
    Crie um arquivo `.env` na raiz do projeto:
    ```env
    GOOGLE_GENAI_API_KEY=sua_chave_api_gemini
@@ -50,32 +48,62 @@ Sistema web para busca, monitoramento e classificação inteligente de licitaç�
    ```
    > Obtenha sua chave em: https://aistudio.google.com/app/apikey
 
-4. **Instale as dependências do servidor de IA**:
+## 🐳 Execução com Docker (recomendado)
+
+```bash
+# Build e inicialização
+docker-compose up --build
+
+# Rodar em background
+docker-compose up -d
+
+# Parar os serviços
+docker-compose down
+
+# Ver logs em tempo real
+docker-compose logs -f
+```
+
+Acesse: `http://localhost:5000`
+
+> Os dados do banco de dados (`database/`) e documentos baixados (`downloads/`) são persistidos via volumes Docker.
+
+## 🏃 Execução Manual (sem Docker)
+
+1. **Configure o ambiente Python**:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # No Windows: venv\Scripts\activate
+   pip install -r requirements.txt
+   ```
+
+2. **Instale as dependências do servidor de IA**:
    ```bash
    cd genkit-server
    npm install
    ```
 
-## 🏃 Como Executar
-
-1. **Inicie o servidor de IA** (em um terminal):
+3. **Inicie o servidor de IA** (em um terminal):
    ```bash
    cd genkit-server
    npm run dev
    ```
 
-2. **Inicie a aplicação Flask** (em outro terminal):
+4. **Inicie a aplicação Flask** (em outro terminal):
    ```bash
    python main.py
    ```
 
-3. Acesse: `http://localhost:5000`
+5. Acesse: `http://localhost:5000`
 
 ## 📂 Estrutura do Projeto
 
 ```
 ├── main.py                     # Ponto de entrada da aplicação
 ├── requirements.txt            # Dependências Python
+├── Dockerfile                  # Container do Flask (Python)
+├── docker-compose.yml          # Orquestração dos serviços
+├── .dockerignore               # Exclusões de build Docker
 ├── app/
 │   ├── config.py               # Configurações globais
 │   ├── routes/api.py           # Todas as rotas (páginas + API)
@@ -88,6 +116,7 @@ Sistema web para busca, monitoramento e classificação inteligente de licitaç�
 │       └── oportunidade_service.py
 ├── database/                   # Schema e migrações do SQLite
 ├── genkit-server/              # Servidor de IA (Genkit/TypeScript)
+│   └── Dockerfile              # Container do Genkit (Node.js)
 ├── templates/                  # Templates HTML (Jinja2)
 └── static/                     # CSS e JavaScript
 ```
