@@ -16,6 +16,6 @@ DOWNLOADS_DIR.mkdir(exist_ok=True)
 
 # Configurações da aplicação Flask
 FLASK_SECRET_KEY = os.environ.get("FLASK_SECRET_KEY", "dev-secret-key-change-in-production")
-FLASK_DEBUG = True
-FLASK_HOST = "127.0.0.1"
-FLASK_PORT = 5000
+FLASK_DEBUG = os.environ.get("FLASK_DEBUG", "true").lower() in ("true", "1", "yes")
+FLASK_HOST = os.environ.get("FLASK_HOST", "127.0.0.1")
+FLASK_PORT = int(os.environ.get("FLASK_PORT", "5000"))

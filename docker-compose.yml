@@ -1,0 +1,27 @@
+services:
+  flask-app:
+    build: .
+    container_name: pesquisa-licitacoes-flask
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./database:/app/database
+      - ./downloads:/app/downloads
+    environment:
+      - FLASK_HOST=0.0.0.0
+      - FLASK_DEBUG=false
+      - GENKIT_URL=http://genkit-server:3400
+    env_file:
+      - .env
+    depends_on:
+      - genkit-server
+    restart: unless-stopped
+
+  genkit-server:
+    build: ./genkit-server
+    container_name: pesquisa-licitacoes-genkit
+    ports:
+      - "3400:3400"
+    env_file:
+      - .env
+    restart: unless-stopped
