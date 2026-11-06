@@ -33,6 +33,16 @@ the first-pass triage.
 - **Opportunity tracking**: save tenders of interest and follow them.
 - **Statistics dashboard**: volume of tenders found and classified.
 
+## 📸 Screenshots
+
+Captured from the running application (the UI is in Brazilian Portuguese).
+
+| Dashboard | Searches |
+|---|---|
+| <img src="docs/img/dashboard.png" alt="Dashboard"> | <img src="docs/img/searches.png" alt="Searches and keywords"> |
+
+<img src="docs/img/results.png" alt="Results with filters by keyword, status, value, date, state and AI classification">
+
 ## 🏗️ Architecture
 
 ```mermaid
