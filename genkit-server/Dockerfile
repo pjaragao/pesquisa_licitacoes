@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Instala dependências Node primeiro (cache de camada)
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+RUN npm install --omit=dev && npm cache clean --force
 
 # Instala tsx como dependência de desenvolvimento para rodar TypeScript
 RUN npm install tsx

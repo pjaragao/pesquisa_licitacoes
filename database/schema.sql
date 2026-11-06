@@ -81,6 +81,8 @@ CREATE TABLE IF NOT EXISTS oportunidades (
     -- Documentos
     pasta_local TEXT,  -- Caminho local dos documentos
     pasta_google_drive TEXT,  -- Link da pasta no Google Drive (futuro)
+    url_processo TEXT, -- Link do processo original
+    valor_estimado TEXT, -- Valor da estimativa
     
     -- Análise futura
     analisado_ia INTEGER DEFAULT 0,
@@ -140,3 +142,64 @@ CREATE TABLE IF NOT EXISTS configuracao_empresa (
     criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
     atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Tabela de histórico de pesquisas realizadas
+CREATE TABLE IF NOT EXISTS historico_pesquisas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    termos TEXT NOT NULL,         -- JSON ou string separada por vírgula
+    ufs TEXT,                     -- JSON ou string separada por vírgula
+    incremental INTEGER DEFAULT 0, -- Booleano (0 ou 1)
+    status TEXT DEFAULT 'pendente', -- pendente, rodando, concluido, erro, travado
+    progresso INTEGER DEFAULT 0,
+    uf_atual TEXT,
+    total_encontrados INTEGER DEFAULT 0,
+    novos_salvos INTEGER DEFAULT 0,
+    atualizados INTEGER DEFAULT 0,
+    logs_auditoria TEXT,          -- JSON list com logs de erro, infos e totalizadores
+    criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+    finalizado_em DATETIME NULL
+);
+
+-- Tabela de Cache Local: Itens da Oportunidade
+CREATE TABLE IF NOT EXISTS oportunidade_itens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    oportunidade_id INTEGER,
+    numero_item INTEGER,
+    descricao TEXT,
+    quantidade REAL,
+    unidade_medida TEXT,
+    valor_unitario_estimado REAL,
+    valor_total REAL,
+    criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (oportunidade_id) REFERENCES oportunidades(id) ON DELETE CASCADE
+);
+
+-- Tabela de Cache Local: Arquivos da Oportunidade
+CREATE TABLE IF NOT EXISTS oportunidade_arquivos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    oportunidade_id INTEGER,
+    titulo TEXT,
+    url TEXT,
+    tipo_documento TEXT,
+    data_publicacao TEXT,
+    criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (oportunidade_id) REFERENCES oportunidades(id) ON DELETE CASCADE
+);
+
+-- Tabela de Cache Local: Histórico da Oportunidade
+CREATE TABLE IF NOT EXISTS oportunidade_historico (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    oportunidade_id INTEGER,
+    situacao TEXT,
+    data_hora TEXT,
+    observacao TEXT,
+    usuario TEXT,
+    criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (oportunidade_id) REFERENCES oportunidades(id) ON DELETE CASCADE
+);
+
+-- Índices adicionais para performance de cache
+CREATE INDEX IF NOT EXISTS idx_itens_oportunidade ON oportunidade_itens(oportunidade_id);
+CREATE INDEX IF NOT EXISTS idx_arquivos_oportunidade ON oportunidade_arquivos(oportunidade_id);
+CREATE INDEX IF NOT EXISTS idx_historico_oportunidade ON oportunidade_historico(oportunidade_id);

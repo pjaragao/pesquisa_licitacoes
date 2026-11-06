@@ -228,24 +228,24 @@
             <h4 class="result-title">{{ r.titulo or 'Sem título' }}</h4>
 
             <div class="result-details">
-                <p><strong>📍 Órgão/UF:</strong> {{ r.orgao or 'N/A' }} / <strong>{{ r.uf or '-' }}</strong></p>
+                <p><strong>📍 Órgão / UF:</strong> {{ r.orgao or 'Não informado' }} / <strong>{{ r.uf or '-' }}</strong></p>
 
                 {% if r.inicio_propostas %}
-                <p><strong>🚀 Início Propostas:</strong> {{ r.inicio_propostas }}</p>
+                <p><strong>🚀 Data de início de recebimento de propostas:</strong> {{ r.inicio_propostas }}</p>
                 {% endif %}
 
                 {% if r.limite_recebimento %}
-                <p><strong>⏳ Limite Recebimento:</strong> {{ r.limite_recebimento }}</p>
+                <p><strong>⏳ Data fim de recebimento de propostas:</strong> {{ r.limite_recebimento }}</p>
                 {% endif %}
 
                 {% if r.abertura_propostas %}
-                <p><strong>🔔 Abertura Propostas:</strong> {{ r.abertura_propostas }}</p>
+                <p><strong>🔔 Abertura Propostas (Sistema Origem):</strong> {{ r.abertura_propostas }}</p>
                 {% endif %}
 
-                <p><strong>📝 Modalidade:</strong> {{ r.modalidade or 'N/A' }}</p>
+                <p><strong>📝 Modalidade da contratação:</strong> {{ r.modalidade or 'N/A' }}</p>
 
                 {% if r.valor_estimado %}
-                <p><strong>💰 Valor:</strong> <span class="valor-destaque">{{ r.valor_estimado }}</span></p>
+                <p><strong>💰 VALOR TOTAL ESTIMADO DA COMPRA:</strong> <span class="valor-destaque">{{ r.valor_estimado }}</span></p>
                 {% endif %}
             </div>
 
@@ -506,67 +506,6 @@
         location.reload();
     }
 
-    async function criarOportunidade(btn, resultadoId) {
-        const textoOriginal = btn.textContent;
-        btn.disabled = true;
-        btn.textContent = '⏳ Criando...';
-
-        try {
-            const response = await fetch(`/api/oportunidade/criar/${resultadoId}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
-
-            const data = await response.json();
-
-            if (response.ok && data.success) {
-                // Sucesso - substitui o botão por badge
-                const parent = btn.parentElement;
-                btn.remove();
-                const badge = document.createElement('span');
-                badge.className = 'badge badge-info';
-                badge.textContent = `✓ ${data.codigo}`;
-                parent.appendChild(badge);
-
-                // Mostra notificação temporária
-                showNotification(`✅ ${data.message}`, 'success');
-            } else {
-                btn.disabled = false;
-                btn.textContent = textoOriginal;
-                showNotification(`❌ ${data.error || 'Erro ao criar oportunidade'}`, 'error');
-            }
-        } catch (e) {
-            btn.disabled = false;
-            btn.textContent = textoOriginal;
-            showNotification(`❌ Erro de conexão: ${e.message}`, 'error');
-        }
-    }
-
-    function showNotification(message, type = 'info') {
-        // Cria notificação flutuante temporária
-        const notification = document.createElement('div');
-        notification.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 1rem 1.5rem;
-            border-radius: 8px;
-            background: ${type === 'error' ? '#fef2f2' : type === 'success' ? '#f0fdf4' : '#f0f9ff'};
-            border: 1px solid ${type === 'error' ? '#fecaca' : type === 'success' ? '#bbf7d0' : '#bfdbfe'};
-            color: ${type === 'error' ? '#991b1b' : type === 'success' ? '#166534' : '#1e40af'};
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 9999;
-            animation: slideIn 0.3s ease;
-        `;
-        notification.innerHTML = message;
-        document.body.appendChild(notification);
-
-        setTimeout(() => {
-            notification.style.animation = 'slideOut 0.3s ease';
-            setTimeout(() => notification.remove(), 300);
-        }, 3000);
-    }
-
     async function salvarPrompt() {
         const prompt = document.getElementById('prompt-empresa').value.trim();
         if (!prompt) {
@@ -783,7 +722,7 @@
             const data = await response.json();
 
             if (response.ok) {
-                showNotification('✅ Classificação atualizada!', 'success');
+                showAlert('✅ Classificação atualizada!', 'success');
                 // Atualiza as estatísticas visualmente (opcional, melhor recarregar ou atualizar o card)
                 // Para feedback imediato, vamos apenas recarregar as estatísticas e dar um destaque
                 carregarEstatisticasIA();

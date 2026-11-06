@@ -1,0 +1,413 @@
+{% extends "base.html" %}
+
+{% block title %}Pesquisas - Portal Licitatório{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>🔍 Pesquisas</h2>
+    <p>Gerencie pesquisas em andamento, cheque o histórico ou inicie auditorias detalhadas.</p>
+</div>
+
+<!-- ======================= CARD: DISPARAR NOVA PESQUISA & PALAVRAS ======================= -->
+<div class="card" style="margin-bottom: 2rem; border-left: 4px solid var(--primary-color);">
+    <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+        
+        <!-- Bloco Palavras Chaves -->
+        <div style="flex: 1; min-width: 300px;">
+            <h3 style="margin-top: 0;">Palavras-Chave Escutadas</h3>
+            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                {% if palavras %}
+                    {% for p in palavras %}
+                    <span class="badge" style="background: #e9ecef; color: #333; padding: 0.4rem 0.6rem; border: 1px solid #ddd; display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
+                        {{ p.termo }}
+                        <form action="{{ url_for('main.form_deletar_palavra', id=p.id) }}" method="POST" style="margin:0;" onsubmit="return confirm('Tem certeza que deseja remover esta palavra-chave?')">
+                            <button type="submit" style="background:none; border:none; cursor:pointer; color:red; padding:0; font-weight:bold;">&times;</button>
+                        </form>
+                    </span>
+                    {% endfor %}
+                {% else %}
+                    <span style="color: #666; font-size: 0.9rem;">Nenhuma cadastrada.</span>
+                {% endif %}
+            </div>
+            
+            <form action="{{ url_for('main.form_adicionar_palavra') }}" method="POST" style="display: flex; gap: 0.5rem;">
+                <input type="text" name="termo" class="form-control" style="max-width: 250px; padding: 0.4rem;" placeholder="Nova palavra (Ex: esgoto)..." required>
+                <button type="submit" class="btn btn-sm btn-primary">➕ Add</button>
+            </form>
+        </div>
+
+        <!-- Bloco Controles da Pesquisa -->
+        <div style="flex: 1; min-width: 300px; padding-left: 1rem; border-left: 1px dashed #ccc;">
+            <h3 style="margin-top: 0;">Disparar Pesquisa</h3>
+            
+            <div style="display: flex; align-items: flex-start; gap: 1rem; flex-wrap: wrap;">
+                <div>
+                     <!-- UFs Selector Simples -->
+                    <button type="button" class="btn btn-sm btn-outline" onclick="toggleAllUfs(true)">Todas UFs</button>
+                    <button type="button" class="btn btn-sm btn-outline" onclick="toggleAllUfs(false)">Limpar UFs</button>
+                    <div class="ufs-mini-grid" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.3rem; margin-top: 0.5rem; font-size: 0.8rem;">
+                        {% set ufs = ['AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO'] %}
+                        {% for uf in ufs %}
+                        <label style="cursor: pointer; display: flex; align-items: center; gap: 0.2rem;">
+                            <input type="checkbox" name="global_ufs" value="{{ uf }}" checked> {{ uf }}
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <div style="display: flex; flex-direction: column; gap: 0.5rem; justify-content: flex-end; align-items: flex-start;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; padding: 0.5rem; background: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6;">
+                        <input type="checkbox" id="check-incremental" style="width: 1.2rem; height: 1.2rem;" checked>
+                        <div style="display: flex; flex-direction: column;">
+                            <span style="font-weight: 600; font-size: 0.9rem;">Busca Incremental</span>
+                            <small style="color: #666; line-height: 1;">Apenas novos editais</small>
+                        </div>
+                    </label>
+                    <button type="button" class="btn btn-success" style="width: 100%;" onclick="window.pesquisarTodas();">
+                        🚀 Disparar Busca
+                    </button>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+</div>
+
+<!-- ======================= CARD: MONITORAMENTO E HISTÓRICO ======================= -->
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin:0;">Histórico e Monitoramento Auditoria</h3>
+        <button class="btn btn-sm btn-outline" onclick="loadHistorico()">🔄 Atualizar</button>
+    </div>
+    
+    <div style="overflow-x: auto; margin-top: 1rem;">
+        <table class="table table-striped" id="historicoTable">
+            <thead>
+                <tr>
+                    <th width="50">ID</th>
+                    <th width="120">Início</th>
+                    <th>Termos (Amostra)</th>
+                    <th width="130">Status</th>
+                    <th>Progresso</th>
+                    <th>Descobertas</th>
+                    <th width="160">Ações</th>
+                </tr>
+            </thead>
+            <tbody id="historicoBody">
+                <tr><td colspan="7" style="text-align:center;">Carregando histórico...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ======================= MODAL: AUDITORIA DE LOGS ======================= -->
+<div id="auditModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; background-color: rgba(0,0,0,0.5);">
+    <div class="modal-content" style="background-color: #fefefe; margin: 5% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 800px; border-radius: 8px; max-height: 80vh; display: flex; flex-direction: column;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; padding-bottom: 1rem; margin-bottom: 1rem;">
+            <h3 style="margin: 0;">📋 Auditoria Detalhada - Tarefa #<span id="auditTaskId"></span></h3>
+            <span class="close" onclick="closeAuditModal()" style="color: #aaa; font-size: 28px; font-weight: bold; cursor: pointer;">&times;</span>
+        </div>
+        <div id="auditContent" style="flex:1; overflow-y: auto; background: #2d2d2d; color: #a4d27f; padding: 1rem; border-radius: 4px; font-family: monospace; font-size: 0.9rem; line-height: 1.5; margin-bottom: 1rem;">
+            <!-- Logs rendered here via JS -->
+        </div>
+        <div style="text-align: right;">
+            <button class="btn btn-secondary" onclick="closeAuditModal()">Fechar</button>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Modernized UI for Pesquisas */
+:root {
+    --bg-surface: #ffffff;
+    --bg-body: #f4f7f6;
+    --primary: #0099a8;
+    --primary-light: #e0f2f1;
+    --danger: #ef5350;
+    --warning: #ffa726;
+    --success: #66bb6a;
+    --info: #29b6f6;
+    --text-main: #2c3e50;
+    --text-muted: #7f8c8d;
+    --border-ui: #edf2f7;
+}
+
+.card {
+    border: none;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    transition: transform 0.2s ease;
+}
+
+.table th {
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    border-top: none;
+    background: #fafbfc;
+}
+
+.status-badge {
+    padding: 0.4rem 0.8rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.st-pendente { background: #edf2f7; color: #4a5568; }
+.st-rodando { 
+    background: #e3f2fd; color: #1976d2; 
+    box-shadow: 0 0 0 2px #bbdefb;
+    animation: statusPulse 2s infinite;
+}
+.st-concluido { background: #e8f5e9; color: #2e7d32; }
+.st-erro { background: #ffebee; color: #c62828; }
+.st-travado { background: #fff3e0; color: #ef6c00; }
+
+@keyframes statusPulse {
+    0% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.8; transform: scale(0.98); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+.progress-bar-container {
+    background-color: #edf2f7;
+    border-radius: 999px;
+    height: 8px;
+    width: 100%;
+    margin-top: 6px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    background: linear-gradient(90deg, var(--primary) 0%, #4db6ac 100%);
+    height: 100%;
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-action {
+    padding: 0.5rem 0.8rem;
+    border-radius: 8px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border: 1px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.btn-log {
+    background: #f8fafc;
+    color: #64748b;
+    border-color: #e2e8f0;
+}
+.btn-log:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+.btn-retry {
+    background: #fff8f8;
+    color: #e53e3e;
+    border-color: #feb2b2;
+}
+.btn-retry:hover {
+    background: #fed7d7;
+    border-color: #fc8181;
+}
+
+.badge-term {
+    background: white;
+    color: #4a5568;
+    border: 1px solid #e2e8f0;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+.badge-term:hover {
+    border-color: var(--primary);
+    background: #f0f9fa;
+}
+
+.modal-content {
+    border-radius: 16px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+#auditContent {
+    border-radius: 12px;
+    border: 1px solid #1a202c;
+    box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
+}
+
+/* UF Grid refinements */
+.ufs-mini-grid label {
+    padding: 4px 6px;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+.ufs-mini-grid label:hover {
+    background: #f1f5f9;
+}
+</style>
+
+<script>
+let updateInterval = null;
+
+function loadHistorico() {
+    fetch('/api/pesquisar/status')
+        .then(r => r.json())
+        .then(data => {
+            const tbody = document.getElementById('historicoBody');
+            tbody.innerHTML = '';
+            
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Nenhuma pesquisa registrada ainda.</td></tr>';
+                return;
+            }
+            
+            data.forEach(task => {
+                let termosStr = (task.termos || []).slice(0, 3).join(', ');
+                if ((task.termos || []).length > 3) termosStr += '...';
+                if (!termosStr) termosStr = '<span class="text-muted">Todas as keywords</span>';
+                
+                // Tratar status
+                let stClass = 'st-' + task.status;
+                let stLabel = task.status === 'rodando' ? '📡 Rodando' : 
+                             task.status === 'concluido' ? '✅ Concluído' :
+                             task.status === 'erro' ? '❌ Erro' :
+                             task.status === 'pendente' ? '⏳ Pendente' : task.status;
+                
+                // Botões
+                let bts = `<button class="btn-action btn-log" onclick='showAuditModal(${JSON.stringify(task).replace(/'/g, "&#39;")})'>
+                    <span>📋</span> Logs
+                </button>`;
+                
+                if (['erro', 'travado', 'concluido'].includes(task.status)) {
+                    bts += ` <button class="btn-action btn-retry" onclick="reiniciarTask(${task.id})" title="Reiniciar do zero">
+                        <span>🔄</span> Reiniciar
+                    </button>`;
+                }
+
+                let findings = `<div style="line-height:1.2">
+                    <span style="color:#2d3748; font-weight:600">✨ ${task.novos_salvos}</span> novos<br>
+                    <small class="text-muted">🔄 ${task.atualizados} atualizados</small>
+                </div>`;
+                
+                if (task.status === 'erro' || task.status === 'travado') {
+                    findings = `<div style="color:#c53030; font-size:0.8rem; max-width:150px; overflow:hidden; text-overflow:ellipsis;">
+                        ${task.erro || 'Erro fatal'}
+                    </div>`;
+                } else if (task.status === 'pendente') {
+                    findings = '<span class="text-muted">-</span>';
+                }
+
+                let row = `<tr style="vertical-align: middle;">
+                    <td style="color:#a0aec0; font-weight:600">#${task.id}</td>
+                    <td style="font-size:0.85rem">
+                        <div style="font-weight:600; color:#2d3748">${task.inicio}</div>
+                        <div style="color:#a0aec0; font-size:0.75rem">${task.incremental ? 'INCREMENTAL' : 'TOTAL'}</div>
+                    </td>
+                    <td style="font-size:0.9rem; color:#4a5568">${termosStr}</td>
+                    <td><span class="status-badge ${stClass}">${stLabel}</span></td>
+                    <td style="min-width:180px">
+                        <div style="font-size:0.75rem; font-weight:600; color:#718096; display:flex; justify-content:space-between">
+                            <span>${task.uf_atual || 'Iniciando...'}</span>
+                            <span>${task.progresso}%</span>
+                        </div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" style="width: ${task.progresso}%"></div>
+                        </div>
+                    </td>
+                    <td>${findings}</td>
+                    <td style="white-space:nowrap">${bts}</td>
+                </tr>`;
+                
+                tbody.insertAdjacentHTML('beforeend', row);
+            });
+            
+            // Auto refresh se tem algo rodando
+            const temRodando = data.some(t => t.status === 'pendente' || t.status === 'rodando');
+            if (temRodando && !updateInterval) {
+                updateInterval = setInterval(loadHistorico, 3000);
+            } else if (!temRodando && updateInterval) {
+                clearInterval(updateInterval);
+                updateInterval = null;
+            }
+        });
+}
+
+function reiniciarTask(id) {
+    if(!confirm('Tem certeza que deseja reiniciar o ciclo de buscas desta tarefa?')) return;
+    
+    fetch('/api/pesquisar/' + id + '/reiniciar', {
+        method: 'POST'
+    })
+    .then(r => r.json())
+    .then(res => {
+        if(res.error) alert('Erro: ' + res.error);
+        else loadHistorico();
+    });
+}
+
+function showAuditModal(task) {
+    document.getElementById('auditTaskId').textContent = task.id;
+    const content = document.getElementById('auditContent');
+    content.innerHTML = '';
+    
+    if (task.logs && task.logs.length > 0) {
+        task.logs.forEach(log => {
+            content.innerHTML += `<div><span style="color:#888;">[${log.hora}]</span> ${log.msg}</div>`;
+        });
+    } else {
+        content.innerHTML = '<i>Nenhum log registrado para esta pesquisa.</i>';
+    }
+    
+    document.getElementById('auditModal').style.display = 'block';
+    // Auto scroll p/ fim do conteudo
+    content.scrollTop = content.scrollHeight;
+}
+
+function closeAuditModal() {
+    document.getElementById('auditModal').style.display = 'none';
+}
+
+function toggleAllUfs(check) {
+    document.querySelectorAll('input[name="global_ufs"]').forEach(el => el.checked = check);
+}
+
+// Sobrescrever a função do app.js original só para a pesquisa nativa desta tela
+window.pesquisarTodas = function() {
+    const btn = document.querySelector('button[onclick="window.pesquisarTodas();"]');
+    btn.innerHTML = 'Aguarde...';
+    btn.disabled = true;
+    
+    const ufs = Array.from(document.querySelectorAll('input[name="global_ufs"]:checked')).map(el => el.value);
+    const inc = document.getElementById('check-incremental').checked;
+    
+    fetch('/api/pesquisar-todas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            ufs: ufs,
+            incremental: inc
+        })
+    }).then(r => r.json()).then(res => {
+        btn.innerHTML = '🚀 Disparar Busca';
+        btn.disabled = false;
+        
+        if(res.error) {
+            alert("Erro: " + res.error);
+        } else {
+            loadHistorico();
+        }
+    });
+};
+
+// Initial load
+document.addEventListener('DOMContentLoaded', loadHistorico);
+</script>
+{% endblock %}

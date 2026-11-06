@@ -74,26 +74,40 @@ async function executarPesquisa(termo) {
 }
 
 // Criar oportunidade
-async function criarOportunidade(resultadoId, button) {
-    if (!confirm('Deseja criar uma oportunidade para este resultado? O sistema irá extrair detalhes e baixar documentos.')) {
-        return;
-    }
-
-    showLoading(button);
+async function criarOportunidade(btn, resultadoId) {
+    if (!btn || !resultadoId) return;
+    
+    const textoOriginal = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '⏳ Criando...';
 
     try {
-        const result = await API.post('/api/oportunidades', { resultado_id: resultadoId });
+        const response = await fetch(`/api/oportunidade/criar/${resultadoId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
 
-        if (result.error) {
-            showAlert(result.error, 'error');
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+            // Sucesso - substitui o botão por badge
+            const parent = btn.parentElement;
+            btn.remove();
+            const badge = document.createElement('span');
+            badge.className = 'badge badge-info';
+            badge.textContent = `✓ ${data.codigo || 'Oportunidade Criada'}`;
+            parent.appendChild(badge);
+
+            showAlert(`✅ ${data.message || 'Oportunidade criada com sucesso!'}`, 'success');
         } else {
-            showAlert(`Oportunidade ${result.codigo} criada com sucesso!`);
-            location.reload();
+            btn.disabled = false;
+            btn.textContent = textoOriginal;
+            showAlert(`❌ ${data.error || 'Erro ao criar oportunidade'}`, 'error');
         }
     } catch (e) {
-        showAlert('Erro ao criar oportunidade: ' + e.message, 'error');
-    } finally {
-        hideLoading(button);
+        btn.disabled = false;
+        btn.textContent = textoOriginal;
+        showAlert(`❌ Erro de conexão: ${e.message}`, 'error');
     }
 }
 
@@ -274,14 +288,14 @@ window.renderizarTarefa = function (task) {
     div.className = 'task-item';
 
     const statusClass = `status-${task.status}`;
-    const termosInfo = task.termos_concluidos.length + '/' + task.termos.length;
+    const termosCount = task.termos ? task.termos.length : 0;
+    const infoAtual = task.uf_atual ? task.uf_atual : 'Iniciando...';
 
-    // Calcula progresso se for apenas um termo
     const progresso = task.progresso || 0;
 
     div.innerHTML = `
         <div class="task-header">
-            <span><strong>Tarefa:</strong> ${task.id}</span>
+            <span><strong>Tarefa:</strong> ${task.id} (${termosCount} termos)</span>
             <span class="task-status ${statusClass}">${task.status}</span>
         </div>
         <div class="progress-container">
@@ -289,7 +303,7 @@ window.renderizarTarefa = function (task) {
         </div>
         <div class="task-footer">
             <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: #666; margin-top: 5px;">
-                <span>📍 ${termosInfo} termos | ✨ ${task.novos_salvos} novos | 🔄 ${task.atualizados || 0} atualizados</span>
+                <span>📍 ${infoAtual} | 📊 Encontrados: ${task.total_encontrados || 0} | ✨ Novos: ${task.novos_salvos} | 🔄 Modificados: ${task.atualizados || 0}</span>
                 <span>🕒 ${task.inicio}${task.fim ? ' - ' + task.fim : ''}</span>
             </div>
             ${task.erro ? `<div style="margin-top: 5px;"><small class="status-erro">❌ ${task.erro}</small></div>` : ''}

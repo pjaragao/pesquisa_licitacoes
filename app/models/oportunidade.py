@@ -165,6 +165,16 @@ class Oportunidade:
             )
             row = cursor.fetchone()
             return Oportunidade._from_row(row) if row else None
+            
+    @staticmethod
+    def buscar_por_resultado_id(resultado_id: int) -> 'Oportunidade':
+        """Busca oportunidade por ID do resultado original"""
+        with get_db() as conn:
+            cursor = conn.execute(
+                "SELECT * FROM oportunidades WHERE resultado_id = ?", (resultado_id,)
+            )
+            row = cursor.fetchone()
+            return Oportunidade._from_row(row) if row else None
     
     def deletar(self):
         """Deleta a oportunidade do banco"""
@@ -234,3 +244,78 @@ class Oportunidade:
             'criado_em': str(self.criado_em) if self.criado_em else None,
             'atualizado_em': str(self.atualizado_em) if self.atualizado_em else None
         }
+
+    # ==================== MÉTODOS DE CACHE LOCAL ====================
+
+    def salvar_itens_cache(self, itens: list):
+        """Salva a lista de itens no cache local"""
+        with get_db() as conn:
+            conn.execute("DELETE FROM oportunidade_itens WHERE oportunidade_id = ?", (self.id,))
+            for i in itens:
+                conn.execute('''
+                    INSERT INTO oportunidade_itens 
+                    (oportunidade_id, numero_item, descricao, quantidade, unidade_medida, valor_unitario_estimado, valor_total)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    self.id,
+                    i.get('numeroItem'),
+                    i.get('descricao') or i.get('materialOuServicoNome'),
+                    i.get('quantidade'),
+                    i.get('unidadeMedida'),
+                    i.get('valorUnitarioEstimado'),
+                    i.get('valorTotal')
+                ))
+
+    def salvar_arquivos_cache(self, arquivos: list):
+        """Salva a lista de arquivos no cache local"""
+        with get_db() as conn:
+            conn.execute("DELETE FROM oportunidade_arquivos WHERE oportunidade_id = ?", (self.id,))
+            for a in arquivos:
+                conn.execute('''
+                    INSERT INTO oportunidade_arquivos 
+                    (oportunidade_id, titulo, url, tipo_documento, data_publicacao)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (
+                    self.id,
+                    a.get('titulo') or a.get('tituloArquivo') or a.get('nomeArquivo'),
+                    a.get('url') or a.get('linkArquivo') or a.get('href'),
+                    a.get('tipoDocumentoNome'),
+                    a.get('dataPublicacaoPncp')
+                ))
+
+    def salvar_historico_cache(self, historico: list):
+        """Salva a lista de histórico no cache local"""
+        with get_db() as conn:
+            conn.execute("DELETE FROM oportunidade_historico WHERE oportunidade_id = ?", (self.id,))
+            for h in historico:
+                conn.execute('''
+                    INSERT INTO oportunidade_historico 
+                    (oportunidade_id, situacao, categoria, nome_arquivo, data_hora, observacao, usuario)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    self.id,
+                    h.get('tipoLogManutencaoNome') or h.get('nomeSituacaoCompra') or h.get('status') or h.get('situacaoNome') or 'Inclusão',
+                    h.get('categoriaLogManutencaoNome') or h.get('categoriaNome') or h.get('tipoLogManutencaoItemNome'),
+                    h.get('documentoTitulo') or h.get('nomeArquivo') or h.get('arquivoNome') or h.get('documentoNome') or h.get('nomeDocumento'),
+                    h.get('logManutencaoDataInclusao') or h.get('dataHoraRegistro') or h.get('dataHoraAcao') or h.get('dataInclusao') or h.get('dataPublicacaoPncp'),
+                    h.get('justificativa') or h.get('justificativaJustificativa') or h.get('motivo') or h.get('observacao') or h.get('descricaoJustificativa') or h.get('informacaoComplementar') or h.get('itemJustificativa'),
+                    h.get('usuarioNome') or h.get('logManutencaoUsuarioNome') or h.get('usuarioResponsavel') or h.get('nomeUsuario')
+                ))
+
+    def obter_itens_cache(self) -> list:
+        """Obtém itens do cache local"""
+        with get_db() as conn:
+            cursor = conn.execute("SELECT * FROM oportunidade_itens WHERE oportunidade_id = ? ORDER BY numero_item", (self.id,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def obter_arquivos_cache(self) -> list:
+        """Obtém arquivos do cache local"""
+        with get_db() as conn:
+            cursor = conn.execute("SELECT * FROM oportunidade_arquivos WHERE oportunidade_id = ? ORDER BY id", (self.id,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def obter_historico_cache(self) -> list:
+        """Obtém histórico do cache local"""
+        with get_db() as conn:
+            cursor = conn.execute("SELECT * FROM oportunidade_historico WHERE oportunidade_id = ? ORDER BY data_hora DESC", (self.id,))
+            return [dict(row) for row in cursor.fetchall()]

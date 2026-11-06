@@ -1,7 +1,11 @@
 """
 Serviço de Busca PNCP - Busca licitações via API e filtra por palavras-chave
+
+Dois modos de busca:
+  - Total: Usa /v1/contratacoes/proposta (tudo com propostas abertas)
+  - Incremental: Usa /v1/contratacoes/publicacao (por data de publicação)
 """
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Callable
 from datetime import datetime, timedelta
 import re
 
@@ -33,20 +37,20 @@ class PncpSearchService:
         termo_norm = self._normalizar_texto(termo)
         return termo_norm in texto_norm
     
-    def _resultado_contem_termos(self, resultado: Dict, termos: List[str]) -> bool:
+    def _quais_termos_combinam(self, resultado: Dict, termos: List[str]) -> List[str]:
         """
-        Verifica se o resultado contém algum dos termos buscados.
+        Retorna lista de termos que combinam com o resultado.
         Busca no objeto da compra e informação complementar.
         """
-        # Campos a verificar
         objeto = resultado.get("objetoCompra", "") or ""
         info_complementar = resultado.get("informacaoComplementar", "") or ""
         texto_completo = f"{objeto} {info_complementar}"
         
+        matched = []
         for termo in termos:
             if self._contem_termo(texto_completo, termo):
-                return True
-        return False
+                matched.append(termo)
+        return matched
     
     def _mapear_para_resultado_pesquisa(self, item: Dict, palavra_chave_id: int = None) -> Dict:
         """
@@ -122,17 +126,66 @@ class PncpSearchService:
             "data_atualizacao_api": formatar_data(item.get("dataAtualizacao", ""))
         }
     
+    def _filtrar_e_mapear(
+        self, 
+        items: List[Dict], 
+        termos: List[str], 
+        urls_vistas: set,
+        max_resultados: int,
+        resultados: list
+    ) -> int:
+        """
+        Filtra itens da API por termos e mapeia para formato do sistema.
+        Retorna quantidade de matches encontrados.
+        Modifica resultados e urls_vistas in-place.
+        """
+        matches = 0
+        
+        for item in items:
+            if len(resultados) >= max_resultados:
+                break
+            
+            # Verifica quais termos combinam
+            matched_termos = self._quais_termos_combinam(item, termos)
+            if not matched_termos:
+                continue
+            
+            # Evita duplicatas pelo número de controle PNCP
+            chave = item.get("numeroControlePNCP") or item.get("linkSistemaOrigem", "")
+            if not chave or chave in urls_vistas:
+                continue
+            urls_vistas.add(chave)
+            
+            # Mapeia para formato do sistema
+            resultado = self._mapear_para_resultado_pesquisa(item)
+            resultado['_matched_termos'] = matched_termos
+            resultados.append(resultado)
+            matches += 1
+        
+        return matches
+    
     def pesquisar(
         self,
         termos: List[str],
         ufs: List[str] = None,
-        dias_ate_encerramento: int = 30,
+        dias_ate_encerramento: int = 60,
         max_resultados: int = 5000,
-        palavra_chave_id: int = None,
-        data_publicacao_inicial: str = None
+        on_uf_progress: Callable = None
     ) -> List[Dict]:
         """
-        Busca licitações na API PNCP e filtra por termos localmente.
+        Busca TOTAL: licitações com propostas abertas, filtradas por termos.
+        Usa endpoint /v1/contratacoes/proposta.
+        Faz UMA passagem por UF e filtra contra TODOS os termos.
+        
+        Args:
+            termos: Lista de termos para filtrar (todos de uma vez)
+            ufs: Lista de UFs para buscar
+            dias_ate_encerramento: Dias à frente para propostas
+            max_resultados: Máximo de resultados
+            on_uf_progress: Callback(uf, uf_index, total_ufs, uf_matches, uf_total_items)
+        
+        Returns:
+            Lista de resultados, cada um com '_matched_termos'
         """
         resultados = []
         urls_vistas = set()
@@ -143,89 +196,146 @@ class PncpSearchService:
         # UFs a buscar
         ufs_busca = ufs if ufs else self.UFS_BRASIL
         
-        print(f"🔍 Buscando licitações em {len(ufs_busca)} UF(s) até {data_final}")
-        if data_publicacao_inicial:
-            print(f"📅 Incremental: A partir de {data_publicacao_inicial}")
-        print(f"🔎 Filtrando por termos: {termos}")
+        print(f"🔍 [TOTAL] Buscando licitações em {len(ufs_busca)} UF(s) até {data_final}")
+        print(f"🔎 Filtrando por {len(termos)} termos: {termos}")
         
-        for uf in ufs_busca:
+        for uf_idx, uf in enumerate(ufs_busca):
             if len(resultados) >= max_resultados:
                 break
             
             try:
-                print(f"\n📍 Buscando em {uf}...")
+                print(f"\n📍 Buscando em {uf}... ({uf_idx+1}/{len(ufs_busca)})")
                 
-                # Busca todas as páginas desta UF (aumentado para capturar tudo)
+                # Busca todas as páginas desta UF
                 items = self.client.buscar_todas_paginas(
                     uf=uf,
                     data_final=data_final,
-                    max_paginas=500,
-                    tamanho_pagina=50,
-                    data_publicacao_inicial=data_publicacao_inicial
+                    max_paginas=100,
+                    tamanho_pagina=50
                 )
                 
                 if not items:
                     print(f"   Nenhum resultado em {uf}")
+                    if on_uf_progress:
+                        on_uf_progress(uf, uf_idx, len(ufs_busca), 0, 0)
                     continue
                 
                 print(f"   📊 {len(items)} licitações encontradas em {uf}")
                 
-                # Filtra por termos
-                for item in items:
-                    if len(resultados) >= max_resultados:
-                        break
-                    
-                    # Verifica se contém algum dos termos
-                    if not self._resultado_contem_termos(item, termos):
-                        continue
-                    
-                    # Evita duplicatas
-                    url = item.get("linkSistemaOrigem") or item.get("numeroControlePNCP", "")
-                    if url in urls_vistas:
-                        continue
-                    urls_vistas.add(url)
-                    
-                    # Mapeia para formato do sistema
-                    resultado = self._mapear_para_resultado_pesquisa(item, palavra_chave_id)
-                    resultados.append(resultado)
-                    
-                    print(f"   ✓ {resultado['numero_processo']}: {resultado['titulo'][:50]}...")
+                # Filtra contra TODOS os termos de uma vez
+                uf_matches = self._filtrar_e_mapear(
+                    items, termos, urls_vistas, max_resultados, resultados
+                )
+                
+                print(f"   ✅ {uf_matches} matches com os termos em {uf}")
+                
+                if on_uf_progress:
+                    on_uf_progress(uf, uf_idx, len(ufs_busca), uf_matches, len(items))
                 
             except Exception as e:
                 print(f"   ❌ Erro ao buscar em {uf}: {e}")
+                if on_uf_progress:
+                    on_uf_progress(uf, uf_idx, len(ufs_busca), 0, 0)
                 continue
         
-        print(f"\n✅ Total: {len(resultados)} licitações encontradas para os termos")
+        print(f"\n✅ [TOTAL] {len(resultados)} licitações encontradas para os termos")
         return resultados
     
-    def pesquisar_por_uf(
+    def pesquisar_incremental(
         self,
-        uf: str,
-        termos: List[str] = None,
-        dias_ate_encerramento: int = 30,
-        max_resultados: int = 100,
-        palavra_chave_id: int = None
+        termos: List[str],
+        ufs: List[str] = None,
+        data_inicial: str = None,
+        max_resultados: int = 5000,
+        on_uf_progress: Callable = None
     ) -> List[Dict]:
         """
-        Busca licitações em uma UF específica.
+        Busca INCREMENTAL: licitações publicadas desde data_inicial.
+        Usa endpoint /v1/contratacoes/publicacao.
+        Itera pelas modalidades principais (campo obrigatório nesse endpoint).
         
         Args:
-            uf: Sigla da UF (ex: "SP")
-            termos: Termos para filtrar (opcional)
-            dias_ate_encerramento: Dias à frente para buscar
+            termos: Lista de termos para filtrar
+            ufs: Lista de UFs para buscar
+            data_inicial: Data inicial (YYYYMMDD) - desde quando buscar
             max_resultados: Máximo de resultados
-            palavra_chave_id: ID da palavra-chave
+            on_uf_progress: Callback(uf, uf_index, total_ufs, uf_matches, uf_total_items)
         
         Returns:
-            Lista de resultados no formato do sistema
+            Lista de resultados, cada um com '_matched_termos'
         """
-        return self.pesquisar(
-            termos=termos or [],
-            ufs=[uf.upper()],
-            dias_ate_encerramento=dias_ate_encerramento,
-            max_resultados=max_resultados,
-            palavra_chave_id=palavra_chave_id
-        )
+        resultados = []
+        urls_vistas = set()
+        
+        # Se não tem data_inicial, faz busca total
+        if not data_inicial:
+            print("⚠️ Sem data inicial para incremental, fazendo busca total...")
+            return self.pesquisar(termos, ufs, on_uf_progress=on_uf_progress)
+        
+        data_final = datetime.now().strftime("%Y%m%d")
+        ufs_busca = ufs if ufs else self.UFS_BRASIL
+        modalidades = self.client.MODALIDADES_PRINCIPAIS
+        
+        print(f"🔍 [INCREMENTAL] Buscando publicações de {data_inicial} até {data_final}")
+        print(f"   📋 {len(modalidades)} modalidades × {len(ufs_busca)} UFs")
+        print(f"   🔎 Filtrando por {len(termos)} termos: {termos}")
+        
+        for uf_idx, uf in enumerate(ufs_busca):
+            if len(resultados) >= max_resultados:
+                break
+            
+            try:
+                print(f"\n📍 Incremental em {uf}... ({uf_idx+1}/{len(ufs_busca)})")
+                uf_total_items = 0
+                uf_matches = 0
+                
+                # Itera pelas modalidades (obrigatório no endpoint /publicacao)
+                for modalidade_id in modalidades:
+                    if len(resultados) >= max_resultados:
+                        break
+                    
+                    try:
+                        items = self.client.buscar_todas_paginas_publicacao(
+                            data_inicial=data_inicial,
+                            data_final=data_final,
+                            codigo_modalidade=modalidade_id,
+                            uf=uf,
+                            max_paginas=50,
+                            tamanho_pagina=50
+                        )
+                        
+                        if not items:
+                            continue
+                        
+                        uf_total_items += len(items)
+                        
+                        # Filtra contra TODOS os termos
+                        matches = self._filtrar_e_mapear(
+                            items, termos, urls_vistas, max_resultados, resultados
+                        )
+                        uf_matches += matches
+                        
+                    except Exception as e:
+                        modal_nome = self.client.MODALIDADES.get(modalidade_id, f"#{modalidade_id}")
+                        print(f"     ⚠️ Erro modalidade {modal_nome} em {uf}: {e}")
+                        continue
+                
+                if uf_total_items > 0:
+                    print(f"   📊 {uf_total_items} publicações / ✅ {uf_matches} matches em {uf}")
+                else:
+                    print(f"   Nenhuma publicação nova em {uf}")
+                
+                if on_uf_progress:
+                    on_uf_progress(uf, uf_idx, len(ufs_busca), uf_matches, uf_total_items)
+                
+            except Exception as e:
+                print(f"   ❌ Erro ao buscar em {uf}: {e}")
+                if on_uf_progress:
+                    on_uf_progress(uf, uf_idx, len(ufs_busca), 0, 0)
+                continue
+        
+        print(f"\n✅ [INCREMENTAL] {len(resultados)} novas licitações encontradas")
+        return resultados
 
 
 # Teste rápido
@@ -253,4 +363,4 @@ if __name__ == "__main__":
         print(f"   Órgão: {r['orgao']}")
         print(f"   UF: {r['uf']} | Município: {r['municipio']}")
         print(f"   Valor: {r['valor_estimado']}")
-        print(f"   Data: {r['data_realizacao']}")
+        print(f"   Termos: {r.get('_matched_termos', [])}")

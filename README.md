@@ -1,129 +1,95 @@
-# 🔍 Pesquisa de Licitações - API PNCP
+<div align="center">
 
-Sistema web para busca, monitoramento e classificação inteligente de licitações públicas brasileiras, integrando diretamente com a **API do PNCP** (Portal Nacional de Contratações Públicas) e utilizando **IA generativa** (Gemini via Genkit) para classificação automática de oportunidades.
+# 🔍 Public Tender Search (PNCP)
 
-## 🚀 Funcionalidades
+### Find, monitor and AI-classify Brazilian public procurement notices
 
-- **Busca Automatizada via API PNCP** — Pesquisa em múltiplos estados (UFs) simultaneamente usando palavras-chave, com suporte a buscas incrementais.
-- **Gestão de Palavras-Chave** — Painel para cadastrar, ativar/desativar e monitorar termos de interesse.
-- **Filtros Avançados** — Filtre resultados por valor, data, status, UF, classificação de IA e ordenação flexível.
-- **Classificação por IA** — Avaliação automática de editais (Adequado, Não Adequado ou Incerto) com base em um prompt personalizado que descreve o perfil da empresa.
-- **Otimização de Prompt** — IA que sugere melhorias no prompt de classificação da empresa.
-- **Gestão de Oportunidades** — Salve e gerencie licitações de interesse para acompanhamento.
-- **Dashboard de Estatísticas** — Visualize o volume de licitações encontradas e classificadas.
+*A web app that searches the official PNCP API across many states at once, then uses an LLM with a company-specific prompt to say which tenders are actually worth bidding on.*
 
-## 🛠️ Tecnologias
+![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)
+![Flask](https://img.shields.io/badge/Flask-backend-000000?logo=flask&logoColor=white)
+![TypeScript](https://img.shields.io/badge/Genkit-TypeScript-3178C6?logo=typescript&logoColor=white)
+![Gemini](https://img.shields.io/badge/Google-Gemini-8E75B2?logo=googlegemini&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-compose-2496ED?logo=docker&logoColor=white)
 
-| Camada | Tecnologia |
-|--------|------------|
-| Backend | Python 3.9+ / Flask |
-| Banco de Dados | SQLite |
-| API de Dados | API PNCP (Portal Nacional de Contratações Públicas) |
-| IA / Classificação | Firebase Genkit (Node.js/TypeScript) + Google Gemini |
-| Frontend | HTML (Jinja2) + CSS + JS puro |
-
-## 📋 Pré-requisitos
-
-### Com Docker (recomendado)
-- Docker
-- Docker Compose
-
-### Sem Docker
-- Python 3.9+
-- Node.js 18+ (para o servidor de IA)
-
-## 🔧 Instalação
-
-1. **Clone o repositório**:
-   ```bash
-   git clone https://github.com/pjaragao/pesquisa_licitacoes.git
-   cd pesquisa_licitacoes
-   ```
-
-2. **Configure as variáveis de ambiente**:
-   Crie um arquivo `.env` na raiz do projeto:
-   ```env
-   GOOGLE_GENAI_API_KEY=sua_chave_api_gemini
-   GENKIT_PORT=3400
-   ```
-   > Obtenha sua chave em: https://aistudio.google.com/app/apikey
-
-## 🐳 Execução com Docker (recomendado)
-
-```bash
-# Build e inicialização
-docker-compose up --build
-
-# Rodar em background
-docker-compose up -d
-
-# Parar os serviços
-docker-compose down
-
-# Ver logs em tempo real
-docker-compose logs -f
-```
-
-Acesse: `http://localhost:5000`
-
-> Os dados do banco de dados (`database/`) e documentos baixados (`downloads/`) são persistidos via volumes Docker.
-
-## 🏃 Execução Manual (sem Docker)
-
-1. **Configure o ambiente Python**:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # No Windows: venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
-
-2. **Instale as dependências do servidor de IA**:
-   ```bash
-   cd genkit-server
-   npm install
-   ```
-
-3. **Inicie o servidor de IA** (em um terminal):
-   ```bash
-   cd genkit-server
-   npm run dev
-   ```
-
-4. **Inicie a aplicação Flask** (em outro terminal):
-   ```bash
-   python main.py
-   ```
-
-5. Acesse: `http://localhost:5000`
-
-## 📂 Estrutura do Projeto
-
-```
-├── main.py                     # Ponto de entrada da aplicação
-├── requirements.txt            # Dependências Python
-├── Dockerfile                  # Container do Flask (Python)
-├── docker-compose.yml          # Orquestração dos serviços
-├── .dockerignore               # Exclusões de build Docker
-├── app/
-│   ├── config.py               # Configurações globais
-│   ├── routes/api.py           # Todas as rotas (páginas + API)
-│   ├── models/                 # Modelos de dados (SQLite)
-│   └── services/               # Lógica de negócio
-│       ├── pncp_api_client.py  # Cliente HTTP da API PNCP
-│       ├── pncp_search_service.py  # Pesquisa e filtragem
-│       ├── search_manager.py   # Buscas em background
-│       ├── genkit_service.py   # Integração com IA
-│       └── oportunidade_service.py
-├── database/                   # Schema e migrações do SQLite
-├── genkit-server/              # Servidor de IA (Genkit/TypeScript)
-│   └── Dockerfile              # Container do Genkit (Node.js)
-├── templates/                  # Templates HTML (Jinja2)
-└── static/                     # CSS e JavaScript
-```
-
-## 🤝 Contribuição
-
-Contribuições são bem-vindas! Abra Issues ou envie Pull Requests.
+</div>
 
 ---
-Desenvolvido para otimizar o acompanhamento de compras públicas no Brasil.
+
+## The problem
+
+Brazil publishes thousands of public tenders every day on the **PNCP** (Portal Nacional de Contratações Públicas). A supplier
+needs to read hundreds of notices to find the few that match what the company sells. This project automates the search and
+the first-pass triage.
+
+## ✨ Features
+
+- **Automated multi-state search** over the PNCP API, by keyword, with background execution.
+- **Keyword management**: register, enable/disable and monitor terms of interest.
+- **Advanced filters**: value, date, status, state, AI classification and flexible sorting.
+- **AI classification**: each notice is rated *Suitable*, *Not suitable* or *Uncertain* using a prompt written for the company.
+- **Prompt optimization**: the AI suggests improvements to the company's own classification prompt.
+- **Opportunity tracking**: save tenders of interest and follow them.
+- **Statistics dashboard**: volume of tenders found and classified.
+
+## 🏗️ Architecture
+
+```mermaid
+flowchart LR
+    U[Browser] --> F[Flask app<br/>routes + services]
+    F --> DB[(SQLite)]
+    F -- background searches --> P[PNCP public API]
+    F -- classify / optimize prompt --> G[Genkit server<br/>Node.js + TypeScript]
+    G --> LLM[Google Gemini]
+```
+
+| Layer | Technology |
+|---|---|
+| Backend | Python 3.9+ / Flask |
+| Database | SQLite (schema + migrations in `database/`) |
+| Data source | PNCP API (manuals included in `app/docs_API_PNCP/`) |
+| AI | Firebase Genkit (Node.js/TypeScript) + Google Gemini |
+| Frontend | Jinja2 templates + CSS + vanilla JS |
+
+## 🚀 Quick start
+
+```bash
+git clone https://github.com/pjaragao/pesquisa_licitacoes.git && cd pesquisa_licitacoes
+printf 'GOOGLE_GENAI_API_KEY=your_gemini_key\nGENKIT_PORT=3400\n' > .env   # key: https://aistudio.google.com/app/apikey
+docker compose up --build        # open http://localhost:5000
+```
+
+Without Docker:
+
+```bash
+python -m venv venv && source venv/bin/activate && pip install -r requirements.txt
+(cd genkit-server && npm install && npm run dev) &     # AI server
+python main.py                                          # app on :5000
+```
+
+The database (`database/`) and downloaded documents (`downloads/`) persist through Docker volumes.
+
+## 📂 Project structure
+
+```text
+main.py                       entry point
+app/routes/api.py             pages + API routes
+app/models/                   SQLite models
+app/services/
+  pncp_api_client.py          PNCP HTTP client
+  pncp_search_service.py      search and filtering
+  search_manager.py           background searches
+  genkit_service.py           AI integration
+  oportunidade_service.py     saved opportunities
+database/                     schema and migrations
+genkit-server/                AI server (Genkit / TypeScript)
+```
+
+---
+
+<div align="center">
+
+Built by **Paulo Aragão Jr** · [GitHub](https://github.com/pjaragao) · related project: [APP_PNCP](https://github.com/pjaragao/APP_PNCP)
+
+</div>

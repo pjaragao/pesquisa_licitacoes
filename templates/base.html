@@ -17,8 +17,8 @@
         <ul class="navbar-menu">
             <li><a href="{{ url_for('main.index') }}"
                     class="{% if request.endpoint == 'main.index' %}active{% endif %}">Dashboard</a></li>
-            <li><a href="{{ url_for('main.pagina_palavras_chave') }}"
-                    class="{% if request.endpoint == 'main.pagina_palavras_chave' %}active{% endif %}">Palavras-Chave</a>
+            <li><a href="{{ url_for('main.pagina_pesquisas') }}"
+                    class="{% if request.endpoint == 'main.pagina_pesquisas' %}active{% endif %}">Pesquisas</a>
             </li>
             <li><a href="{{ url_for('main.pagina_resultados') }}"
                     class="{% if request.endpoint == 'main.pagina_resultados' %}active{% endif %}">Resultados</a></li>

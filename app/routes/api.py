@@ -1,9 +1,13 @@
 """
 API Routes - Endpoints da aplicação Flask
 """
-from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
+from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, send_file
 import sys
 import time
+import shutil
+import os
+import tempfile
+from datetime import datetime
 from pathlib import Path
 
 # Adiciona o diretório pai ao path
@@ -44,11 +48,12 @@ def index():
                           stats=stats)
 
 
-@main.route('/palavras-chave')
-def pagina_palavras_chave():
-    """Página de gerenciamento de palavras-chave"""
+@main.route('/pesquisas')
+def pagina_pesquisas():
+    """Página de gerenciamento de pesquisas e palavras-chave"""
     palavras = PalavraChave.listar_todas(apenas_ativas=False)
-    return render_template('palavras_chave.html', palavras=palavras)
+    # Tasks não ativas vem pelo front via API, mas podemos inicializar palavras aqui
+    return render_template('pesquisas.html', palavras=palavras)
 
 
 @main.route('/resultados')
@@ -116,7 +121,14 @@ def pagina_resultados():
 def pagina_oportunidades():
     """Página de oportunidades"""
     oportunidades = Oportunidade.listar_todas()
-    return render_template('oportunidades.html', oportunidades=oportunidades)
+    resultados_dict = {}
+    for o in oportunidades:
+        if o.resultado_id:
+            r = ResultadoPesquisa.buscar_por_id(o.resultado_id)
+            if r:
+                resultados_dict[o.id] = r
+                
+    return render_template('oportunidades.html', oportunidades=oportunidades, resultados_dict=resultados_dict)
 
 
 # ==================== API - PALAVRAS-CHAVE ====================
@@ -251,12 +263,30 @@ def api_pesquisar_todas():
 def api_pesquisar_status(task_id=None):
     """Retorna o status de uma ou todas as pesquisas"""
     if task_id:
-        status = search_manager.get_status(task_id)
-        if not status:
-            return jsonify({'error': 'Tarefa não encontrada'}), 404
-        return jsonify(status)
-    
+        if isinstance(task_id, str) and task_id.startswith('search_'):
+            # Backward compatibility safe ignore
+            return jsonify({'error': 'Tarefa legada'}), 404
+        try:
+            task_id = int(task_id)
+            status = search_manager.get_status(task_id)
+            if not status:
+                return jsonify({'error': 'Tarefa não encontrada'}), 404
+            return jsonify(status)
+        except ValueError:
+            return jsonify({'error': 'ID inválido'}), 400
+            
     return jsonify(search_manager.get_all_tasks())
+
+@main.route('/api/pesquisar/<int:task_id>/reiniciar', methods=['POST'])
+def api_pesquisar_reiniciar(task_id):
+    """Reinicia uma pesquisa que falhou ou travou"""
+    try:
+        new_id = search_manager.start_search(
+            termos=[], incremental=False, task_id_reiniciar=task_id
+        )
+        return jsonify({'success': True, 'task_id': new_id})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
 
 
 # ==================== API - RESULTADOS ====================
@@ -294,11 +324,21 @@ def api_atualizar_resultado(id):
         # No entanto, a API PNCP também permite buscar pelo número_controle_pncp em alguns endpoints.
         # Vamos usar o PncpApiClient.buscar_contratacao_detalhes
         
-        # Extrai CNPJ (14), Ano (4), Sequencial (restante)
+        # Extrai CNPJ, Ano, Sequencial corretamente (formato: CNPJ-1-SEQ/ANO ou similar)
         control = resultado.numero_controle_pncp
-        cnpj = control[:14]
-        ano = int(control[14:18])
-        sequencial = int(control[18:])
+        try:
+            if "/" in control and "-" in control:
+                parts = control.split("/")
+                ano = int(parts[1])
+                prefix = parts[0] # ex: 82836057000190-1-000007
+                cnpj = prefix.split("-")[0].replace(".", "").replace("/", "")
+                sequencial = int(prefix.split("-")[-1])
+            else:
+                cnpj = control[:14]
+                ano = int(control[14:18])
+                sequencial = int(control[18:])
+        except ValueError:
+            return jsonify({'error': 'Formato de número de controle PNCP inválido'}), 400
         
         print(f"🔄 Atualizando: {cnpj} / {ano} / {sequencial}")
         
@@ -413,6 +453,117 @@ def form_limpar_oportunidades():
     return redirect(url_for('main.pagina_oportunidades'))
 
 
+# ==================== API - DETALHAMENTO PNCP ====================
+
+def _get_pncp_ids(resultado_id):
+    """Auxiliar para extrair cnpj, ano e sequencial do resultado"""
+    resultado = ResultadoPesquisa.buscar_por_id(resultado_id)
+    if not resultado or not resultado.numero_controle_pncp:
+        return None, "Resultado não encontrado ou sem controle PNCP"
+    
+    control = resultado.numero_controle_pncp
+    try:
+        if "/" in control and "-" in control:
+            parts = control.split("/")
+            ano = int(parts[1])
+            cnpj = parts[0].split("-")[0].replace(".", "").replace("/", "")
+            sequencial = int(parts[0].split("-")[-1])
+        else:
+            cnpj = control[:14]
+            ano = int(control[14:18])
+            sequencial = int(control[18:])
+        return (cnpj, ano, sequencial), None
+    except Exception:
+        return None, "Formato PNCP inválido"
+
+@main.route('/api/oportunidades/<int:id>/itens', methods=['GET'])
+def api_oportunidade_itens(id):
+    """Obtém itens da oportunidade (via cache local ou PNCP)"""
+    service = OportunidadeService()
+    force_refresh = request.args.get('refresh') == 'true'
+    
+    try:
+        itens = service.obter_itens(id, force_refresh=force_refresh)
+        return jsonify({'data': itens})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@main.route('/api/oportunidades/<int:id>/arquivos', methods=['GET'])
+def api_oportunidade_arquivos(id):
+    """Obtém arquivos da oportunidade (via cache local ou PNCP)"""
+    service = OportunidadeService()
+    force_refresh = request.args.get('refresh') == 'true'
+    
+    try:
+        arquivos = service.obter_arquivos(id, force_refresh=force_refresh)
+        return jsonify({'data': arquivos})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@main.route('/api/oportunidades/<int:id>/historico', methods=['GET'])
+def api_oportunidade_historico(id):
+    """Obtém histórico da oportunidade (via cache local ou PNCP)"""
+    service = OportunidadeService()
+    force_refresh = request.args.get('refresh') == 'true'
+    
+    try:
+        historico = service.obter_historico(id, force_refresh=force_refresh)
+        return jsonify({'data': historico})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@main.route('/api/oportunidades/<int:id>/download-zip', methods=['GET'])
+def api_oportunidade_download_zip(id):
+    """Gera um arquivo ZIP com todos os documentos baixados da oportunidade"""
+    oportunidade = Oportunidade.buscar_por_id(id)
+    if not oportunidade:
+        return jsonify({'error': 'Oportunidade não encontrada'}), 404
+        
+    service = OportunidadeService()
+    pasta_local = Path(oportunidade.pasta_local)
+    
+    # Garante que a pasta_local seja absoluta e limpa
+    pasta_local = Path(str(oportunidade.pasta_local).strip())
+    
+    # Se estiver fora do docker, tenta converter o caminho /app para o caminho local
+    if not pasta_local.exists() and "/app/" in str(pasta_local):
+        pasta_local = Path(str(pasta_local).replace("/app/", "/home/paulojr/pesquisa_licitacoes/"))
+        
+    # Se a pasta não existe ou está vazia, tenta baixar agora (sincronamente)
+    resultado = ResultadoPesquisa.buscar_por_id(oportunidade.resultado_id)
+    if not pasta_local.exists() or not any(pasta_local.iterdir()):
+        if resultado and resultado.numero_controle_pncp:
+            print(f"🔄 [ZIP] Iniciando download síncrono para {resultado.numero_controle_pncp}")
+            service._baixar_arquivos_background(resultado.numero_controle_pncp, pasta_local)
+            
+    # Verifica final se baixou algo
+    if not pasta_local.exists() or not any(pasta_local.iterdir()):
+        # Agora resultado está definido e disponível para a mensagem abaixo
+        control_msg = resultado.numero_controle_pncp if resultado else "ID desconhecido"
+        return jsonify({
+            'error': 'Arquivos não encontrados no servidor.',
+            'detalhes': f'Tentamos baixar de {control_msg} mas a pasta {pasta_local} continua vazia.'
+        }), 404
+        
+    try:
+        # Cria diretório temporário para o ZIP
+        temp_dir = tempfile.mkdtemp()
+        zip_base_name = os.path.join(temp_dir, f"Arquivos_{oportunidade.codigo}")
+        
+        # Cria o arquivo ZIP usando shutil.make_archive
+        zip_path_full = shutil.make_archive(zip_base_name, 'zip', str(pasta_local))
+        
+        return send_file(
+            zip_path_full,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=f"Arquivos_{oportunidade.codigo}.zip"
+        )
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 # ==================== FORM HANDLERS ====================
 
 @main.route('/palavras-chave/adicionar', methods=['POST'])
@@ -429,7 +580,7 @@ def form_adicionar_palavra():
     else:
         flash('O termo não pode estar vazio', 'error')
     
-    return redirect(url_for('main.pagina_palavras_chave'))
+    return redirect(url_for('main.pagina_pesquisas'))
 
 
 @main.route('/palavras-chave/deletar/<int:id>', methods=['POST'])
@@ -442,7 +593,7 @@ def form_deletar_palavra(id):
     else:
         flash('Palavra-chave não encontrada', 'error')
     
-    return redirect(url_for('main.pagina_palavras_chave'))
+    return redirect(url_for('main.pagina_pesquisas'))
 
 
 @main.route('/pesquisar', methods=['POST'])
@@ -476,7 +627,7 @@ def form_pesquisar():
     except Exception as e:
         flash(f'Erro ao iniciar pesquisa: {e}', 'error')
     
-    return redirect(url_for('main.pagina_palavras_chave'))
+    return redirect(url_for('main.pagina_pesquisas'))
 
 
 @main.route('/criar-oportunidade/<int:resultado_id>', methods=['POST'])

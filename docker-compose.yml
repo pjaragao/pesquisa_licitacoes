@@ -2,26 +2,43 @@ services:
   flask-app:
     build: .
     container_name: pesquisa-licitacoes-flask
-    ports:
-      - "5000:5000"
+    network_mode: host
     volumes:
       - ./database:/app/database
       - ./downloads:/app/downloads
+      - ./app:/app/app
+      - ./static:/app/static
+      - ./templates:/app/templates
+      - ./main.py:/app/main.py
     environment:
       - FLASK_HOST=0.0.0.0
+      - FLASK_PORT=5055
       - FLASK_DEBUG=false
-      - GENKIT_URL=http://genkit-server:3400
+      - GENKIT_URL=http://localhost:3400
+      - TZ=America/Sao_Paulo
     env_file:
       - .env
-    depends_on:
-      - genkit-server
     restart: unless-stopped
+    labels:
+      paulojr.stack: "pesquisa-licitacoes"
+      paulojr.type: "application"
+      paulojr.origin: "github"
+      paulojr.ssl_port: "5056"
+      coolify.managed: "true"
+      coolify.applicationId: "2"
+      coolify.type: "application"
+      coolify.name: "at6j06s8deq3kh6bkqpkb2qf"
 
   genkit-server:
     build: ./genkit-server
     container_name: pesquisa-licitacoes-genkit
-    ports:
-      - "3400:3400"
+    network_mode: host
     env_file:
       - .env
+    environment:
+      - TZ=America/Sao_Paulo
     restart: unless-stopped
+    labels:
+      paulojr.stack: "pesquisa-licitacoes"
+      paulojr.type: "application"
+      paulojr.origin: "github"

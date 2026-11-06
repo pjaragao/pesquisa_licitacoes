@@ -23,7 +23,7 @@ class ResultadoPesquisa:
                  amparo_legal=None, data_publicacao_pncp=None,
                  informacao_complementar=None,                 link_processo_eletronico=None,
                  data_atualizacao_api=None,
-                 atualizado_em=None):
+                 atualizado_em=None, **kwargs):
         self.id = id
         self.palavra_chave_id = palavra_chave_id
         self.numero_processo = numero_processo
@@ -95,8 +95,8 @@ class ResultadoPesquisa:
                     dados.get('inicio_propostas'),
                     dados.get('limite_recebimento'),
                     dados.get('abertura_propostas'),
-                    # Novos campos
-                    dados.get('numero_controle_pncp'),
+                    # Novos campos - Limpeza de caracteres fantasmas do PNCP
+                    str(dados.get('numero_controle_pncp') or '').strip().replace('\n', '').replace('\r', ''),
                     dados.get('processo'),
                     dados.get('valor_estimado_numerico'),
                     dados.get('valor_homologado'),
@@ -111,6 +111,8 @@ class ResultadoPesquisa:
                     dados.get('link_processo_eletronico'),
                     dados.get('data_atualizacao_api')
                 ))
+                # Remove campos internos que não pertencem ao __init__ antes de instanciar
+                dados.pop('_matched_termos', None)
                 return ResultadoPesquisa(id=cursor.lastrowid, **dados)
             except Exception as e:
                 # Provavelmente registro duplicado (UNIQUE constraint)
@@ -444,4 +446,19 @@ class ResultadoPesquisa:
                 return True
             except Exception as e:
                 print(f"Erro ao salvar classificação manual: {e}")
+                return False
+
+    def marcar_selecionado(self, selecionado: bool = True) -> bool:
+        """Marca o resultado como selecionado (oportunidade criada)"""
+        with get_db() as conn:
+            try:
+                val = 1 if selecionado else 0
+                conn.execute(
+                    "UPDATE pesquisa_resultados SET selecionado_detalhe = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?",
+                    (val, self.id)
+                )
+                self.selecionado_detalhe = selecionado
+                return True
+            except Exception as e:
+                print(f"Erro ao marcar selecionado: {e}")
                 return False
